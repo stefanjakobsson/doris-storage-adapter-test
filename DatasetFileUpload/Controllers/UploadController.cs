@@ -20,12 +20,12 @@ public class UploadController : Controller
         this.configuration = configuration;
     }
 
-    [HttpPost("upload/{datasetVersionIdentifier}")]
-    public IActionResult AddFile(string datasetVersionIdentifier, AddFileRequest request)
+    [HttpPost("upload/{datasetIdentifier}/{versionNumber}")]
+    public IActionResult AddFile(string datasetIdentifier, string versionNumber, AddFileRequest request)
     {
 
-        logger.LogInformation($"Upload (POST upload datasetVersionIdentifier: {datasetVersionIdentifier}), file: {request.File.FileName}");
-        logger.LogInformation($"Store file {request.File.FileName} to {datasetVersionIdentifier}/data/{request.Folder}/{request.File.FileName}");
+        logger.LogInformation($"Upload (POST upload datasetIdentifier: {datasetIdentifier}), file: {request.File.FileName}");
+        logger.LogInformation($"Store file {request.File.FileName} to {datasetIdentifier}/data/{request.Folder}/{request.File.FileName}");
 
         return Ok(new
         {
