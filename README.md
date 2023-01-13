@@ -24,7 +24,7 @@ Upload file to a dataset version.
 
 **POST** `upload/{datasetIdentifier}/{versionNumber}`
 
-### Payload
+#### Payload
 * `file` form encoded file
 * `folder` folder path
 * `type` one of `data`, `documentation` or `metadata`
