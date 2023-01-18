@@ -24,8 +24,17 @@ public class UploadController : Controller
     public IActionResult AddFile(string datasetIdentifier, string versionNumber, AddFileRequest request)
     {
 
-        logger.LogInformation($"Upload (POST upload datasetIdentifier: {datasetIdentifier}), file: {request.File.FileName}");
-        logger.LogInformation($"Store file {request.File.FileName} to {datasetIdentifier}/data/{request.Folder}/{request.File.FileName}");
+        logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {request.File.FileName}");
+        
+        // Base path for file based on dataset version and type of file
+        string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + request.Type.ToString().ToLower();
+        
+        // Append subfolder path if set
+        if(request.Folder != null && request.Folder.Length > 0){
+            folderPath += "/" + request.Folder;
+        }
+        
+        logger.LogInformation($"Store file {request.File.FileName} in \"{folderPath}/{request.File.FileName}\"");
 
         return Ok(new
         {
