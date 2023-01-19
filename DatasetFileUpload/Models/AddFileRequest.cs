@@ -11,5 +11,4 @@ public enum FileType{
 
 public record AddFileRequest(
     IFormFile File,
-    FileType Type,
     string Folder);

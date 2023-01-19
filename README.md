@@ -4,6 +4,24 @@ Mockup for DORIS remote file upload
 
 ## Flow
 
+### Get auth status
+Get the status of existing session.
+The remote endpoint needs to have the header `Access-Control-Allow-Origin: https://staging.snd.gu.se`
+
+
+1. Do GET (fetch) `https://upload.example.org/sessionStatus`
+
+2. If session exist return `200` 
+   ```json
+   {
+      eduPersonPrincipalName: "ex0001@example.org"
+   }
+   ```
+3. If `401` set header 
+`Redirect: https://example.org/login?redirect=https://upload.example.org/sessionStatus`
+ 
+
+
 ### Get ro-crate manifest
 Get the `ro-cate-manifest.json` in an existing dataset version.
 
@@ -13,9 +31,15 @@ Get the `ro-cate-manifest.json` in an existing dataset version.
 * `200` if the dataset version exists, body contains the current ro-crate manifest 
 * `404` if the dataset version does not exist
 
-### Create new dataset version
+### Create new dataset version / update manifest
 Create or updates a manifest for a dataset version.
 If post fails, DORIS will show an error message to the user and retry every x-minute.
+
+Manifest will contain:
+* conditionsOfAccess PUBLIC / other `http://publications.europa.eu/resource/authority/access-right`
+* Person objects with eduPersonPrincipalName
+* publicationDate set if dataset version is published
+
 
 **POST** `{datasetIdentifier}/{versionNumber}/manifest`
 
@@ -67,3 +91,4 @@ Delete file to a dataset version.
 # Dicussion points
 * Session for user swamid or simple flow with token/otp for file upload?
 * Should files be uploaded and changes via DORIS only or should other methods be allowed (SAMBA, SFTP etc.)
+* Add `Access-Control-Allow-Origin: https://staging.snd.gu.se` to all controllers

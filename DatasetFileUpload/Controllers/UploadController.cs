@@ -20,14 +20,25 @@ public class UploadController : Controller
         this.configuration = configuration;
     }
 
-    [HttpPost("upload/{datasetIdentifier}/{versionNumber}")]
-    public IActionResult AddFile(string datasetIdentifier, string versionNumber, AddFileRequest request)
+    [HttpPost("upload/{datasetIdentifier}/{versionNumber}/{type}")]
+    public IActionResult AddFile(string datasetIdentifier, string versionNumber, FileType type, AddFileRequest request)
     {
+
+        // check if user is authenticated 
+
+        // check if user exist in manifest
+
+        // check if current dataset version is not published (publicationDate is set in manifest)
+
+        // if type === data check if manifest conditionsOfAccess is PUBLIC (file of type data needs to generate url)
 
         logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {request.File.FileName}");
         
+        // send file to storage service
+
+
         // Base path for file based on dataset version and type of file
-        string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + request.Type.ToString().ToLower();
+        string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + type.ToString().ToLower();
         
         // Append subfolder path if set
         if(request.Folder != null && request.Folder.Length > 0){
@@ -35,6 +46,20 @@ public class UploadController : Controller
         }
         
         logger.LogInformation($"Store file {request.File.FileName} in \"{folderPath}/{request.File.FileName}\"");
+
+        /* RETURN:
+        {
+            "@type": "File",
+            "@id": "data/data.csv",
+            "contentSize": 4242,
+            "sha256": "XXXXXXXXXXXXXXXXXXXXX",
+            "dateCreated": "2022-02-21T11:45:20Z",
+            "dateModified": "2022-02-22T15:50:30Z",
+            "encodingFormat": "text/csv",
+            "url": "https://example.org/record/04679b46-964c-11ec-b909-0242ac120002/data.csv"
+        }
+        */
+
 
         return Ok(new
         {
