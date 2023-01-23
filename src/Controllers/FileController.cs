@@ -9,19 +9,20 @@ using Microsoft.Extensions.Logging;
 
 namespace DatasetFileUpload.Controllers;
 
-public class UploadController : Controller
+public class FileController : Controller
 {
     private readonly ILogger logger;
     private readonly IConfiguration configuration;
 
-    public UploadController(ILogger<UploadController> logger, IConfiguration configuration)
+    public FileController(ILogger<FileController> logger, IConfiguration configuration)
     {
         this.logger = logger;
         this.configuration = configuration;
     }
 
-    [HttpPost("upload/{datasetIdentifier}/{versionNumber}/{type}")]
-    public IActionResult AddFile(string datasetIdentifier, string versionNumber, FileType type, AddFileRequest request)
+
+    [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    public IActionResult Upload(string datasetIdentifier, string versionNumber, FileType type, AddFileRequest request)
     {
 
         // check if user is authenticated 
@@ -61,6 +62,17 @@ public class UploadController : Controller
         */
 
 
+        return Ok(new
+        {
+            Success = true
+        });
+    }
+
+
+    [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    public IActionResult Delete(string datasetIdentifier, string versionNumber, FileType type, string filePath)
+    {
+        // TODO: do some validation of filePath
         return Ok(new
         {
             Success = true

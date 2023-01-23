@@ -14,7 +14,7 @@ public class ManifestController : Controller
     private readonly ILogger logger;
     private readonly IConfiguration configuration;
 
-    public ManifestController(ILogger<UploadController> logger, IConfiguration configuration)
+    public ManifestController(ILogger<ManifestController> logger, IConfiguration configuration)
     {
         this.logger = logger;
         this.configuration = configuration;
@@ -31,8 +31,8 @@ public class ManifestController : Controller
         });
     }
 
-    [HttpGet("{datasetIdentifier}/{versionNumber}/manifest")]
-    public IActionResult GetManifest(string datasetIdentifier, string versionNumber)
+    [HttpGet("{datasetIdentifier}/{versionNumber}/files")]
+    public IActionResult GetFiles(string datasetIdentifier, string versionNumber)
     {
 
         return Ok(); //TODO: return manifest
