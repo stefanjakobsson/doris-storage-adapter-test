@@ -61,6 +61,9 @@ public class FileController : Controller
         }
         */
 
+        logger.LogInformation(request.File.ToString());
+
+        //Models.File file = new Models.File(folderPath + '/' + request.File.FileName, request.File.Length);
 
         return Ok(new
         {

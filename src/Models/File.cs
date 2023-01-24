@@ -1,5 +1,3 @@
-using System;
-
 namespace DatasetFileUpload.Models;
 
 public record File(

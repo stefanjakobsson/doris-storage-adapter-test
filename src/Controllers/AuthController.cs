@@ -27,6 +27,10 @@ public class AuthController : Controller
         // TODO:
         // * check authService if session exists
         // * if not, set head Redirect to login page (config)
-        return Ok();
+        //return Ok();
+
+        Response.Headers.Add("Redirect", configuration["LoginRedirectUrl"]);
+
+        return new UnauthorizedResult();
     }
 }
