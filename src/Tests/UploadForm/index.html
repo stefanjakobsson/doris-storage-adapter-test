@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+        body {
+          font-family: Verdana, sans-serif;
+        }
+    </style>
+    <title>🗃️ Upload form</title>
+  </head>
+  <body>
+    <h1>🗃️ Upload files test 🧪</h1>
+
+    <h3>Data</h3>
+    <form action="http://localhost:8051/file/2023-42/1/data">
+        <input type="file" name="files[]" webkitdirectory directory multiple/>
+        <input type="hidden" name="paths" id="paths"/>
+    </form>
+
+    <h3>Documentation</h3>
+    <form action="http://localhost:8051/file/2023-42/1/documentation">
+        <input type="file" name="files[]" webkitdirectory directory multiple/>
+        <input type="hidden" name="paths" id="paths"/>
+    </form>
+  </body>
+</html>

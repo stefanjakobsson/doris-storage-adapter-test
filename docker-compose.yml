@@ -10,3 +10,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8051
+  uoload-form:
+    image: httpd:latest
+    container_name: upload-form
+    ports: 
+      - 80:80
+    volumes:
+      - ./src/Tests/UploadForm:/usr/local/apache2/htdocs

@@ -12,11 +12,7 @@ The remote endpoint needs to have the header `Access-Control-Allow-Origin: https
 1. Do GET (fetch) `https://upload.example.org/sessionStatus`
 
 2. If session exist return `200` 
-   ```json
-   {
-      eduPersonPrincipalName: "ex0001@example.org"
-   }
-   ```
+
 3. If `401` set header 
 `Redirect: https://example.org/login?redirect=https://upload.example.org/sessionStatus`
  
