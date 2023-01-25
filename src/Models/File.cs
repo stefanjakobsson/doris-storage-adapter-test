@@ -1,10 +1,16 @@
 namespace DatasetFileUpload.Models;
 
-public record File(
+public enum FileType{
+    Data,
+    Documentation,
+    Metadata
+}
+
+public record RoCrateFile(
     string Id,
-    long? ContentSize,
-    DateTime? DateCreated,
-    DateTime? DateModified,
-    string? EncodingFormat,
-    string? Sha256,
-    Uri? Url);
+    long? ContentSize = null,
+    DateTime? DateCreated = null,
+    DateTime? DateModified = null,
+    string? EncodingFormat = null,
+    string? Sha256 = null,
+    Uri? Url = null);

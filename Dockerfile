@@ -21,6 +21,8 @@ EXPOSE 8051
 # Add a new user "upload-dev" with user id 8877
 RUN useradd -u 8877 upload-dev
 
+RUN mkdir /var/data && chown -R upload-dev:upload-dev /var/data
+
 USER upload-dev
 
 ENV ASPNETCORE_URLS=http://+:8051

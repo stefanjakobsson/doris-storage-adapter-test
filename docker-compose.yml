@@ -10,9 +10,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8051
-  uoload-form:
+    user: "upload-dev:upload-dev"
+  uoload-form-test:
     image: httpd:latest
-    container_name: upload-form
+    container_name: upload-form-test
     ports: 
       - 80:80
     volumes:

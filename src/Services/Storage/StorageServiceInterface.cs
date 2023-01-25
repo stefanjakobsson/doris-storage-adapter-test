@@ -1,12 +1,13 @@
 namespace DatasetFileUpload.Services.Storage;
 
+using System.Text.Json;
 using DatasetFileUpload.Models;
 
 interface IStorageService{
 
-    public bool storeManifest(string datasetIdentifier, string versionNumber, string manifest);
+    public bool StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest);
 
-    public File storeFile(string datasetIdentifier, string versionNumber, FileType type, IFormFile file);
+    public RoCrateFile StoreFile(string datasetIdentifier, string versionNumber, FileType type, IFormFile file);
 
-    public bool deleteFile(string datasetIdentifier, string versionNumber, FileType type, string filePath);
+    public bool DeleteFile(string datasetIdentifier, string versionNumber, FileType type, string filePath);
 }
