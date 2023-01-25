@@ -26,9 +26,14 @@ class DiskStorageService : IStorageService
         fi.Directory?.Create();
 
         using var fileStream = new FileStream(path, FileMode.Create);
+
         file.CopyToAsync(fileStream);
 
-        return new RoCrateFile(file.FileName, file.Length);
+        return new RoCrateFile{
+            Id = type.ToString().ToLower() + '/' + file.FileName, 
+            ContentSize = file.Length,
+            DateCreated = fi.LastWriteTime
+        };
     }
 
     public bool DeleteFile(string datasetIdentifier, string versionNumber, FileType type, string filePath)
