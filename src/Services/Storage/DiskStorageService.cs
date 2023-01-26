@@ -6,7 +6,7 @@ using DatasetFileUpload.Models;
 class DiskStorageService : IStorageService
 {
 
-    public bool StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
+    public async Task StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
     {
         string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
 
@@ -14,20 +14,24 @@ class DiskStorageService : IStorageService
         fi.Directory?.Create();
 
         using var fileStream = new FileStream(path, FileMode.Create);
-        JsonSerializer.SerializeAsync(fileStream, manifest);
-
-        return true;
+        await JsonSerializer.SerializeAsync(fileStream, manifest);
     }
 
-    public RoCrateFile StoreFile(string datasetIdentifier, string versionNumber, FileType type, IFormFile file)
+    public async Task<JsonDocument> GetManifest(string datasetIdentifier, string versionNumber)
     {
+        throw new NotImplementedException();
+    }
+
+    public async Task<RoCrateFile> StoreFile(string datasetIdentifier, string versionNumber, UploadType type, IFormFile file, bool generateFileUrl)
+    {
+        // move base path to config
         string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, type.ToString().ToLower(), file.FileName);
         var fi = new FileInfo(path);
         fi.Directory?.Create();
 
         using var fileStream = new FileStream(path, FileMode.Create);
 
-        file.CopyToAsync(fileStream);
+        await file.CopyToAsync(fileStream);
 
         return new RoCrateFile{
             Id = type.ToString().ToLower() + '/' + file.FileName, 
@@ -36,7 +40,7 @@ class DiskStorageService : IStorageService
         };
     }
 
-    public bool DeleteFile(string datasetIdentifier, string versionNumber, FileType type, string filePath)
+    public async Task DeleteFile(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
         throw new NotImplementedException();
     }

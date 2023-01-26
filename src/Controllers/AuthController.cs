@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Logging;
+using DatasetFileUpload.Services.Auth;
 
 namespace DatasetFileUpload.Controllers;
 

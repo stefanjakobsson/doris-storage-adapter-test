@@ -22,7 +22,7 @@ public class FileController : Controller
 
 
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public IActionResult Upload(string datasetIdentifier, string versionNumber, FileType type, IFormFileCollection files)
+    public async Task<IEnumerable<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type, IFormFileCollection files)
     {
 
         // check if user is authenticated 
@@ -44,7 +44,7 @@ public class FileController : Controller
             
             // send file to storage service
 
-            roCrateFiles.Add(diskStorageService.StoreFile(datasetIdentifier, versionNumber, type, file));
+            roCrateFiles.Add(await diskStorageService.StoreFile(datasetIdentifier, versionNumber, type, file, true));
 
 
             // Base path for file based on dataset version and type of file
@@ -54,35 +54,16 @@ public class FileController : Controller
             
             logger.LogInformation($"Store file {file.FileName} in \"{folderPath}/{file.FileName}\"");
 
-            /* RETURN:
-            {
-                "@type": "File",
-                "@id": "data/data.csv",
-                "contentSize": 4242,
-                "sha256": "XXXXXXXXXXXXXXXXXXXXX",
-                "dateCreated": "2022-02-21T11:45:20Z",
-                "dateModified": "2022-02-22T15:50:30Z",
-                "encodingFormat": "text/csv",
-                "url": "https://example.org/record/04679b46-964c-11ec-b909-0242ac120002/data.csv"
-            }
-            */
-
             logger.LogInformation(file.ToString());
 
         }
 
-        //Models.File file = new Models.File(folderPath + '/' + request.File.FileName, request.File.Length);
-
-        return Ok(new
-        {
-            Success = true,
-            RoCrateFiles = roCrateFiles
-        });
+        return  roCrateFiles;
     }
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public IActionResult Delete(string datasetIdentifier, string versionNumber, FileType type, string filePath)
+    public IActionResult Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
         // TODO: do some validation of filePath
         return Ok(new
