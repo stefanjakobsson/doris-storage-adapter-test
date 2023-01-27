@@ -10,5 +10,5 @@ record AuthInfo(
 
 interface IAuthService
 {
-    public Task<AuthInfo> getAuthenticatedUser(HttpContext httpContext);
+    public AuthInfo GetAuthenticatedUser(HttpContext httpContext);
 }

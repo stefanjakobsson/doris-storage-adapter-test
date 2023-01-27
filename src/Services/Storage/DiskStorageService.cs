@@ -5,12 +5,6 @@ using DatasetFileUpload.Models;
 
 class DiskStorageService : IStorageService
 {
-    private readonly IConfiguration configuration;
-
-    public DiskStorageService(IConfiguration configuration)
-    {
-        this.configuration = configuration;
-    }
 
     public async Task StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
     {

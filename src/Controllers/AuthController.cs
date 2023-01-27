@@ -1,4 +1,3 @@
-using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
@@ -24,14 +23,20 @@ public class AuthController : Controller
     [HttpGet("check")]
     public IActionResult CheckAuthentication()
     {
+        DummyAuthService authService = new DummyAuthService();
+
+        AuthInfo user = authService.GetAuthenticatedUser(this.HttpContext);
+
+        if(user.IsEmpty){
+            Response.Headers.Add("Redirect", configuration["LoginRedirectUrl"]);
+            return Forbid(configuration["LoginRedirectUrl"]);
+        }
 
         // TODO:
         // * check authService if session exists
         // * if not, set head Redirect to login page (config)
         //return Ok();
 
-        Response.Headers.Add("Redirect", configuration["LoginRedirectUrl"]);
-
-        return new UnauthorizedResult();
+        return Ok(user);
     }
 }

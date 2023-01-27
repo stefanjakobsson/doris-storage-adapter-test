@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Logging;
-using DatasetFileUpload.Services;
+using DatasetFileUpload.Services.Storage;
 
 namespace DatasetFileUpload.Controllers;
 
@@ -35,7 +35,7 @@ public class FileController : Controller
 
         List<RoCrateFile> roCrateFiles = new List<RoCrateFile>();
 
-        DiskStorageService diskStorageService = new DiskStorageService(configuration);
+        DiskStorageService diskStorageService = new DiskStorageService();
 
         foreach (IFormFile file in files){
             logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {file.FileName}");
