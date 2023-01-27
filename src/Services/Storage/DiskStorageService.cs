@@ -5,9 +5,16 @@ using DatasetFileUpload.Models;
 
 class DiskStorageService : IStorageService
 {
+    private readonly IConfiguration configuration;
+
+    public DiskStorageService(IConfiguration configuration)
+    {
+        this.configuration = configuration;
+    }
 
     public async Task StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
     {
+        // move base path to config
         string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
 
         var fi = new FileInfo(path);
@@ -19,7 +26,14 @@ class DiskStorageService : IStorageService
 
     public async Task<JsonDocument> GetManifest(string datasetIdentifier, string versionNumber)
     {
-        throw new NotImplementedException();
+        // move base path to config
+        string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
+        if(File.Exists(path)){
+            using FileStream stream = File.OpenRead(path);
+            return await JsonSerializer.DeserializeAsync<JsonDocument>(stream);
+        }
+
+        throw new FileNotFoundException();
     }
 
     public async Task<RoCrateFile> StoreFile(string datasetIdentifier, string versionNumber, UploadType type, IFormFile file, bool generateFileUrl)

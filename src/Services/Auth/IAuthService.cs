@@ -1,11 +1,11 @@
 namespace DatasetFileUpload.Services.Auth;
 
 record AuthInfo(
-    string? email,
-    string? eduPersonPrincipalName
+    string? Email,
+    string? EduPersonPrincipalName
 )
 {
-    public bool IsEmpty => email == null && eduPersonPrincipalName == null;
+    public bool IsEmpty => Email == null && EduPersonPrincipalName == null;
 }
 
 interface IAuthService

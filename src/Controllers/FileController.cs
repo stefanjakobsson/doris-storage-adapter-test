@@ -35,27 +35,19 @@ public class FileController : Controller
 
         List<RoCrateFile> roCrateFiles = new List<RoCrateFile>();
 
-
-        DiskStorageService diskStorageService = new DiskStorageService();
+        DiskStorageService diskStorageService = new DiskStorageService(configuration);
 
         foreach (IFormFile file in files){
-
             logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {file.FileName}");
             
             // send file to storage service
 
             roCrateFiles.Add(await diskStorageService.StoreFile(datasetIdentifier, versionNumber, type, file, true));
 
-
             // Base path for file based on dataset version and type of file
             string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + type.ToString().ToLower();
             
-            
-            
             logger.LogInformation($"Store file {file.FileName} in \"{folderPath}/{file.FileName}\"");
-
-            logger.LogInformation(file.ToString());
-
         }
 
         return  roCrateFiles;
