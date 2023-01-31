@@ -54,8 +54,7 @@ Upload or update a file for a dataset version.
 **POST** `{datasetIdentifier}/{versionNumber}`
 
 #### Payload
-* `file` form encoded file
-* `folder` folder path
+* `files` ultipart/form-data encoded list of files (contains relative path) 
 * `type` one of `data`, `documentation` or `metadata`
 
 #### Result example

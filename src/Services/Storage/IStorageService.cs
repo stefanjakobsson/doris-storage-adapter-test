@@ -4,11 +4,8 @@ using System.Text.Json;
 using DatasetFileUpload.Models;
 
 interface IStorageService{
-
-
     // change to exception
     public Task StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest);
-
 
     public Task<JsonDocument> GetManifest(string datasetIdentifier, string versionNumber);
 
