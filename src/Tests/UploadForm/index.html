@@ -7,27 +7,187 @@
         font-family: Verdana, sans-serif;
       }
     </style>
-    <title>🗃️ Upload form</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.js"></script>
+    <title>🗃️ localhost Upload form</title>
   </head>
   <body>
-    <main>
-      <h1>🗃️ Upload files test 🧪</h1>
+    <main id="app">
+      <h1>🗃️ Upload files test - staging-sndintegration.artdatabanken.se 🧪</h1>
 
-      <h3>Data</h3>
-      <form name="data" action="http://localhost:8051/file/2023-42/1/data" method="POST" enctype="multipart/form-data">
+      <dl>
+        <dt>Auth user</dt>
+        <dd id="auth-user"> {{ user.email }}</dd>
+      </dl>
+
+      <h3>Data - directory</h3>
+      <form name="data" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Data" method="POST" enctype="multipart/form-data">
           <input type="file" name="files" webkitdirectory directory multiple/>
           <input type="submit" value="send"/>
       </form>
 
-      <h3>Documentation</h3>
-      <form name="documentation" action="http://localhost:8051/file/2023-42/1/documentation" enctype="multipart/form-data">
+      <h3>Data - file</h3>
+      <form @submit.prevent="uploadForm" name="data" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Data" method="POST" enctype="multipart/form-data">
+          <input type="file" ref="dataFiles" name="files" multiple/>
+          <input type="submit" value="send"/>
+      </form>
+      <ul>
+        <li></li>
+      </ul>
+
+      <h3>Documentation - files</h3>
+      <form name="documentation" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Documentation" method="POST" enctype="multipart/form-data">
+          <input type="file" name="files" multiple/>
+          <input type="submit" value="send"/>
+      </form>
+      
+      <hr/>
+<!--
+      <h1>🗃️ Upload files test - localhost 🧪</h1>
+
+      <h3>Data - directory</h3>
+      <form name="data" action="http://localhost:8051/file/asd/1/Data" method="POST" enctype="multipart/form-data">
           <input type="file" name="files" webkitdirectory directory multiple/>
           <input type="submit" value="send"/>
       </form>
+
+      <h3>Data - file</h3>
+      <form name="data" action="http://localhost:8051/file/asd/1/Data" method="POST" enctype="multipart/form-data">
+          <input type="file" name="files" multiple/>
+          <input type="submit" value="send"/>
+      </form>
+
+      <h3>Documentation - files</h3>
+      <form name="documentation" action="http://localhost:8051/file/asd/1/Documentation" method="POST" enctype="multipart/form-data">
+          <input type="file" name="files" multiple/>
+          <input type="submit" value="send"/>
+      </form>
+-->
     </main>
     <footer>
       <hr/>
       <a href="http://localhost:8051/swagger">Swagger specification</a>
     </footer>
+    <script>
+      
+            var app = new Vue({
+                el: '#app',
+                datasetIdentifier: "slu-test-1",
+                datasetVersionNumber: "1",
+                data: {
+                  manifest:{
+                    "@context": "https://w3id.org/ro/crate/1.1/context",
+                    "@graph": [
+                      {
+                        "@type": "CreativeWork",
+                        "@id": "ro-crate-metadata.json",
+                        "conformsTo": {
+                          "@id": "https://w3id.org/ro/crate/1.1"
+                        },
+                        "about": {
+                          "@id": "./"
+                        },
+                        "creator": [
+                          {
+                            "@id": "https://orcid.org/0000-0003-4908-2169"
+                          }
+                        ],
+                        "description": "RO-Crate Metadata File Descriptor (this file)",
+                        "identifier": "04679b46-964c-11ec-b909-0242ac120002",
+                        "publisher": {
+                          "@id": "https://ror.org/01tm6cn81"
+                        }
+                      },
+                      {
+                        "@type": "Person",
+                        "@id": "https://orcid.org/0000-0003-4908-2169",
+                        "email": "example@gu.se",
+                        "identifier": [
+                          {
+                            "@id": "#eduPersonPrincipalName-0"
+                          }
+                        ]
+                      },
+                      {
+                        "@type": "PropertyValue",
+                        "@id": "#eduPersonPrincipalName-0",
+                        "propertyID": "eduPersonPrincipalName",
+                        "value": "xkalle@gu.se"
+                      },
+                      {
+                        "@type": "Organization",
+                        "@id": "https://ror.org/01tm6cn81",
+                        "identifier": [
+                          {
+                            "@id": "#domain-0"
+                          }
+                        ]
+                      },
+                      {
+                        "@type": "PropertyValue",
+                        "@id": "#domain-0",
+                        "propertyID": "domain",
+                        "value": "gu.se"
+                      },
+                      {
+                        "@type": "Dataset",
+                        "@id": "./",
+                        "description": "The RO-Crate Root Data Entity",
+                        "hasPart": [],
+                        "name": "Example RO-Crate"
+                      }
+                    ]
+                  },
+                  files: [] ,
+                  user: {
+                    email: ""
+                  }
+                },
+                created: function () {
+
+                  fetch('https://staging-sndintegration.artdatabanken.se/check')
+                    .then((response) => response.json())
+                    .then((data) => this.user = data);
+
+                },
+                computed: {
+
+                },
+                methods: {
+                  uploadForm: async function(event){
+                    console.log("start upload...");
+                    var files = this.$refs.dataFiles.files;
+                    console.log(files);
+
+                    for(let i = 0; i<files.length; i++){
+                      this.uploadFile(files[i]);
+                    }
+
+                    
+                  },
+                  uploadFile: async function(f) {
+                    /*
+                    https://www.raymondcamden.com/2021/08/08/uploading-multiple-files-with-fetch
+                    */
+                    let form = new FormData();
+                    form.append('file', f);	
+                    let resp = await fetch('https://httpbin.org/post', { 
+                        method: 'POST', 
+                        body: form 
+                    });
+                    let data = await resp.json();
+                    console.log("upload done");
+                    console.log(data);
+                    return data;
+                  }
+                }
+            })
+        </script>
+
+
+
+      
+
+      
+    </script>
   </body>
 </html>
