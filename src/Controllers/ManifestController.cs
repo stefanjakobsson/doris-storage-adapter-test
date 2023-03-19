@@ -20,7 +20,7 @@ public class ManifestController : Controller
         this.configuration = configuration;
     }
 
-    [HttpPost("{datasetIdentifier}/{versionNumber}/manifest")]
+    [HttpPost("/manifest/{datasetIdentifier}/{versionNumber}/manifest")]
     public IActionResult CreateOrUpdateManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
     {
         logger.LogInformation($"Manifest (POST manifest datasetVersionIdentifier: {datasetIdentifier} version: {versionNumber}) ");
@@ -31,7 +31,7 @@ public class ManifestController : Controller
         });
     }
 
-    [HttpGet("{datasetIdentifier}/{versionNumber}/files")]
+    [HttpGet("/manifest/{datasetIdentifier}/{versionNumber}/files")]
     public IActionResult GetFiles(string datasetIdentifier, string versionNumber)
     {
 

@@ -6,22 +6,29 @@ using Microsoft.Extensions.Configuration;
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Logging;
 using DatasetFileUpload.Services.Storage;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace DatasetFileUpload.Controllers;
 
+[ApiController]
+[Authorize]
 public class FileController : Controller
 {
     private readonly ILogger logger;
     private readonly IConfiguration configuration;
 
+    private IStorageService storageService;
+
     public FileController(ILogger<FileController> logger, IConfiguration configuration)
     {
         this.logger = logger;
         this.configuration = configuration;
+        this.storageService = new DiskStorageService();
     }
 
 
-    [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}"), Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<IEnumerable<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type, IFormFileCollection files)
     {
 
@@ -35,14 +42,12 @@ public class FileController : Controller
 
         List<RoCrateFile> roCrateFiles = new List<RoCrateFile>();
 
-        DiskStorageService diskStorageService = new DiskStorageService();
-
         foreach (IFormFile file in files){
             logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {file.FileName}");
             
             // send file to storage service
 
-            roCrateFiles.Add(await diskStorageService.StoreFile(datasetIdentifier, versionNumber, type, file, true));
+            roCrateFiles.Add(await storageService.StoreFile(datasetIdentifier, versionNumber, type, file, true));
 
             // Base path for file based on dataset version and type of file
             string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + type.ToString().ToLower();
@@ -55,13 +60,9 @@ public class FileController : Controller
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public IActionResult Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
+    public async void Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
-        // TODO: do some validation of filePath
-        return Ok(new
-        {
-            Success = true
-        });
+        await storageService.DeleteFile(datasetIdentifier, versionNumber, type, filePath);
     }
 
 }

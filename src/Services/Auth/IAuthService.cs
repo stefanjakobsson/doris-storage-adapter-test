@@ -11,4 +11,6 @@ record AuthInfo(
 interface IAuthService
 {
     public AuthInfo GetAuthenticatedUser(HttpContext httpContext);
+    public string GetUploadToken(AuthInfo user, string datasetIdentifier, string versionNumber);
+    public string GetServiceToken();
 }

@@ -1,47 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <style>
-      body {
-        font-family: Verdana, sans-serif;
-      }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.js"></script>
-    <title>🗃️ localhost Upload form</title>
-  </head>
-  <body>
-    <main id="app">
-      <h1>🗃️ Upload files test - staging-sndintegration.artdatabanken.se 🧪</h1>
 
-      <dl>
-        <dt>Auth user</dt>
-        <dd id="auth-user"> {{ user.email }}</dd>
-      </dl>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: Verdana, sans-serif;
+    }
+    ul.files {
+      list-style: none;
+      padding: 0px;
+    }
 
-      <h3>Data - directory</h3>
-      <form name="data" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Data" method="POST" enctype="multipart/form-data">
-          <input type="file" name="files" webkitdirectory directory multiple/>
-          <input type="submit" value="send"/>
-      </form>
+    ul.files li:before
+    {
+        content: '🗋';
+        margin: 0 1em;    /* any design */
+    }
 
-      <h3>Data - file</h3>
-      <form @submit.prevent="uploadForm" name="data" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Data" method="POST" enctype="multipart/form-data">
-          <input type="file" ref="dataFiles" name="files" multiple/>
-          <input type="submit" value="send"/>
-      </form>
-      <ul>
-        <li></li>
-      </ul>
+    li a{
+      text-decoration: none;
+    }
 
-      <h3>Documentation - files</h3>
-      <form name="documentation" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Documentation" method="POST" enctype="multipart/form-data">
-          <input type="file" name="files" multiple/>
-          <input type="submit" value="send"/>
-      </form>
-      
-      <hr/>
-<!--
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.js"></script>
+  <title>🗃️ localhost Upload form</title>
+</head>
+
+<body>
+  <main id="app">
+    <h1>🗃️ Upload files test 🧪</h1>
+
+    <dl>
+      <dt>Remote endpoint</dt>
+      <dd>{{ remoteEndpoint }}</dd>
+      <dt>Auth user</dt>
+      <dd>{{ user.email }}</dd>
+      <dt>Dataset Identifier</dt>
+      <dd><input v-model="dataset.datasetIdentifier" /></dd>
+    </dl>
+
+    <h3>Data - directory</h3>
+    <form name="data" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Data" method="POST"
+      enctype="multipart/form-data">
+      <input type="file" name="files" webkitdirectory directory multiple />
+      <input type="submit" value="send" />
+    </form>
+
+    <h3>Data - file</h3>
+    <form @submit.prevent="uploadForm" name="data"
+      action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Data" method="POST"
+      enctype="multipart/form-data">
+      <input type="file" ref="dataFiles" name="files" multiple />
+      <input type="submit" value="send" />
+    </form>
+
+    <ul class="files" id="data-files">
+      <li v-for="file in files">{{ file.id }} <span>{{ humanFileSize(file.contentSize) }}</span> <a href="#">❌</a></li>
+    </ul>
+
+    <h3>Documentation - files</h3>
+    <form name="documentation" action="https://staging-sndintegration.artdatabanken.se/file/test1/1/Documentation"
+      method="POST" enctype="multipart/form-data">
+      <input type="file" name="files" multiple />
+      <input type="submit" value="send" />
+    </form>
+    <!--
       <h1>🗃️ Upload files test - localhost 🧪</h1>
 
       <h3>Data - directory</h3>
@@ -62,132 +86,190 @@
           <input type="submit" value="send"/>
       </form>
 -->
-    </main>
-    <footer>
-      <hr/>
-      <a href="http://localhost:8051/swagger">Swagger specification</a>
-    </footer>
-    <script>
-      
-            var app = new Vue({
-                el: '#app',
-                datasetIdentifier: "slu-test-1",
-                datasetVersionNumber: "1",
-                data: {
-                  manifest:{
-                    "@context": "https://w3id.org/ro/crate/1.1/context",
-                    "@graph": [
-                      {
-                        "@type": "CreativeWork",
-                        "@id": "ro-crate-metadata.json",
-                        "conformsTo": {
-                          "@id": "https://w3id.org/ro/crate/1.1"
-                        },
-                        "about": {
-                          "@id": "./"
-                        },
-                        "creator": [
-                          {
-                            "@id": "https://orcid.org/0000-0003-4908-2169"
-                          }
-                        ],
-                        "description": "RO-Crate Metadata File Descriptor (this file)",
-                        "identifier": "04679b46-964c-11ec-b909-0242ac120002",
-                        "publisher": {
-                          "@id": "https://ror.org/01tm6cn81"
-                        }
-                      },
-                      {
-                        "@type": "Person",
-                        "@id": "https://orcid.org/0000-0003-4908-2169",
-                        "email": "example@gu.se",
-                        "identifier": [
-                          {
-                            "@id": "#eduPersonPrincipalName-0"
-                          }
-                        ]
-                      },
-                      {
-                        "@type": "PropertyValue",
-                        "@id": "#eduPersonPrincipalName-0",
-                        "propertyID": "eduPersonPrincipalName",
-                        "value": "xkalle@gu.se"
-                      },
-                      {
-                        "@type": "Organization",
-                        "@id": "https://ror.org/01tm6cn81",
-                        "identifier": [
-                          {
-                            "@id": "#domain-0"
-                          }
-                        ]
-                      },
-                      {
-                        "@type": "PropertyValue",
-                        "@id": "#domain-0",
-                        "propertyID": "domain",
-                        "value": "gu.se"
-                      },
-                      {
-                        "@type": "Dataset",
-                        "@id": "./",
-                        "description": "The RO-Crate Root Data Entity",
-                        "hasPart": [],
-                        "name": "Example RO-Crate"
-                      }
-                    ]
-                  },
-                  files: [] ,
-                  user: {
-                    email: ""
-                  }
-                },
-                created: function () {
+  </main>
+  <footer>
+    <hr />
+    <a href="http://localhost:8051/swagger">Swagger specification</a>
+  </footer>
+  <script>
 
-                  fetch('https://staging-sndintegration.artdatabanken.se/check')
-                    .then((response) => response.json())
-                    .then((data) => this.user = data);
-
-                },
-                computed: {
-
-                },
-                methods: {
-                  uploadForm: async function(event){
-                    console.log("start upload...");
-                    var files = this.$refs.dataFiles.files;
-                    console.log(files);
-
-                    for(let i = 0; i<files.length; i++){
-                      this.uploadFile(files[i]);
-                    }
-
-                    
-                  },
-                  uploadFile: async function(f) {
-                    /*
-                    https://www.raymondcamden.com/2021/08/08/uploading-multiple-files-with-fetch
-                    */
-                    let form = new FormData();
-                    form.append('file', f);	
-                    let resp = await fetch('https://httpbin.org/post', { 
-                        method: 'POST', 
-                        body: form 
-                    });
-                    let data = await resp.json();
-                    console.log("upload done");
-                    console.log(data);
-                    return data;
-                  }
+    var app = new Vue({
+      el: '#app',
+      data: function(){ return {
+        remoteEndpoint: 'https://staging-sndintegration.artdatabanken.se',
+        dataset: {
+          datasetIdentifier: "slu-test-1",
+          versionNumber: '1',
+          title: {
+            sv: "",
+            en: ""
+          }
+        },
+        user: {
+          email: 'example@host.domain',
+          eduPersonPrincipalName: 'test@domain.se'
+        },
+        manifestCache: {
+          "@context": "https://w3id.org/ro/crate/1.1/context",
+          "@graph": [
+            {
+              "@type": "CreativeWork",
+              "@id": "ro-crate-metadata.json",
+              "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.1"
+              },
+              "about": {
+                "@id": "./"
+              },
+              "creator": [
+                {
+                  "@id": "https://orcid.org/0000-0003-4908-2169"
                 }
-            })
-        </script>
+              ],
+              "description": "RO-Crate Metadata File Descriptor (this file)",
+              "identifier": "04679b46-964c-11ec-b909-0242ac120002",
+              "publisher": {
+                "@id": "https://ror.org/01tm6cn81"
+              }
+            },
+            {
+              "@type": "Person",
+              "@id": "https://orcid.org/0000-0003-4908-2169",
+              "email": "example@gu.se",
+              "identifier": [
+                {
+                  "@id": "#eduPersonPrincipalName-0"
+                }
+              ]
+            },
+            {
+              "@type": "PropertyValue",
+              "@id": "#eduPersonPrincipalName-0",
+              "propertyID": "eduPersonPrincipalName",
+              "value": "xkalle@gu.se"
+            },
+            {
+              "@type": "Organization",
+              "@id": "https://ror.org/01tm6cn81",
+              "identifier": [
+                {
+                  "@id": "#domain-0"
+                }
+              ]
+            },
+            {
+              "@type": "PropertyValue",
+              "@id": "#domain-0",
+              "propertyID": "domain",
+              "value": "gu.se"
+            },
+            {
+              "@type": "Dataset",
+              "@id": "./",
+              "description": "The RO-Crate Root Data Entity",
+              "hasPart": [],
+              "name": "Example RO-Crate"
+            }
+          ]
+        },
+        files: [
+          {
+            "@type": "File",
+            "id": "data-Screenshot from 2023-02-06 13-14-37.png",
+            "contentSize": 470061,
+            "dateCreated": "2023-02-09T13:14:37.9955024Z",
+            "dateModified": "2023-02-09T13:14:37.9955029Z",
+            "encodingFormat": "image/png",
+            "sha256": "B80DD6872AA3C809EE4C6054EA725C9101C12EC0084AE033C30A340DE5CFA0D0",
+            "url": "https://staging-sndintegration.artdatabanken.se/fileproxy/data-Screenshot from 2023-02-06 13-14-37.png"
+          }
+        ],
+        user: {
+          email: ""
+        }
+
+      };
+      },
+      created: function () {
+        fetch(this.remoteEndpoint + '/check')
+          .then((response) => response.json())
+          .then((data) => this.user = data);
+      },
+      computed: {
+        roCrateManifest: function(){
+
+        }
+      },
+      methods: {
+        updateManifest: async function() {
+
+        },
+        uploadForm: async function (event) {
+          console.log("start upload...");
+          var files = this.$refs.dataFiles.files;
+          console.log(files);
+
+          for (let i = 0; i < files.length; i++) {
+            this.uploadFile(files[i]);
+          }
+        },
+        deleteFile: async function(filePath) {
+          let resp = await fetch((this.remoteEndpoint + '/file/' + this.dataset.datasetIdentifier + '/' + this.dataset.versionNumber + '/Data'), {
+            method: 'DELETE',
+            body: {
+              filePath: filePath
+            }
+          });
+          console.log(resp);
+        },
+        uploadFile: async function (f) {
+          /*
+          https://www.raymondcamden.com/2021/08/08/uploading-multiple-files-with-fetch
+          */
+          let form = new FormData();
+          form.append('file', f);
+          let resp = await fetch((this.remoteEndpoint + '/file/' + this.dataset.datasetIdentifier + '/' + this.dataset.versionNumber + '/Data'), {
+            method: 'POST',
+            body: form
+          });
+          let fileResult = await resp.json();
+          console.log("upload done");
+          for(let i = 0; i < fileResult.length; i++){
+            this.files.push(fileResult[i]);
+          }
+          return data;
+        },
+        humanFileSize: function(bytes, si=false, dp=0) {
+          const thresh = si ? 1000 : 1024;
+
+          if (Math.abs(bytes) < thresh) {
+            return bytes + ' B';
+          }
+
+          const units = si 
+            ? ['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'] 
+            : ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
+          let u = -1;
+          const r = 10**dp;
+
+          do {
+            bytes /= thresh;
+            ++u;
+          } while (Math.round(Math.abs(bytes) * r) / r >= thresh && u < units.length - 1);
+
+          return bytes.toFixed(dp) + ' ' + units[u];
+        }
+
+      }
+    })
+  </script>
 
 
 
-      
 
-      
-    </script>
-  </body>
+
+
+  </script>
+</body>
+
 </html>

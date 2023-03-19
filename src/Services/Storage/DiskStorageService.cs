@@ -24,7 +24,7 @@ class DiskStorageService : IStorageService
         string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
         if(File.Exists(path)){
             using FileStream stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<JsonDocument>(stream);
+            return await JsonSerializer.DeserializeAsync<JsonDocument>(stream) ?? JsonDocument.Parse("{}");
         }
 
         throw new FileNotFoundException();
@@ -50,7 +50,11 @@ class DiskStorageService : IStorageService
 
     public async Task DeleteFile(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
-        throw new NotImplementedException();
+        string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, type.ToString().ToLower(), filePath);
+        var fi = new FileInfo(path);
+        if(File.Exists(path)){
+            await Task.Factory.StartNew(() => fi.Delete());
+        }
     }
 
 }

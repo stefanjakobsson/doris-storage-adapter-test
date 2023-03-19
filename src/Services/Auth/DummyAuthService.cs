@@ -10,4 +10,14 @@ class DummyAuthService : IAuthService
             EduPersonPrincipalName : "t001@ex.se"
         );
     }
+
+    public string GetUploadToken(AuthInfo user, string datasetIdentifier, string versionNumber)
+    {
+        return "";
+    }
+
+    public string GetServiceToken()
+    {
+        return "";
+    }
 }
