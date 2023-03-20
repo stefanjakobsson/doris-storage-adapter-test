@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Logging;
-using DatasetFileUpload.Services.Auth;
 using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens;
@@ -17,11 +16,13 @@ public class AuthController : Controller
 {
     private readonly ILogger logger;
     private readonly IConfiguration configuration;
+    private TokenService tokenService;
 
     public AuthController(ILogger<AuthController> logger, IConfiguration configuration)
     {
         this.logger = logger;
         this.configuration = configuration;
+        this.tokenService = new TokenService(configuration);
     }
 
     [HttpGet("token/{datasetIdentifier}/{versionNumber}")]
