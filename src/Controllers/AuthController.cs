@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 namespace DatasetFileUpload.Controllers;
 
+[ApiController]
+[Authorize]
 public class AuthController : Controller
 {
     private readonly ILogger logger;
@@ -22,6 +24,12 @@ public class AuthController : Controller
         this.logger = logger;
         this.configuration = configuration;
         this.tokenService = new TokenService(configuration);
+    }
+
+    [HttpGet("token/check"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public IActionResult CheckToken()
+    {
+        return Ok();
     }
 
     [HttpPost("token/{datasetIdentifier}/{versionNumber}"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]

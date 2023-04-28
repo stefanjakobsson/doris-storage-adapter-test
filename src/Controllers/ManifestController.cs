@@ -37,7 +37,7 @@ public class ManifestController : Controller
         });
     }
 
-    [HttpGet("/manifest/{datasetIdentifier}/{versionNumber}/files"), , Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [HttpGet("/manifest/{datasetIdentifier}/{versionNumber}/files"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public IActionResult GetFiles(string datasetIdentifier, string versionNumber)
     {
 

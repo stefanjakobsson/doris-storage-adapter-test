@@ -28,7 +28,6 @@ public class FileController : Controller
         this.storageService = new DiskStorageService();
     }
 
-
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}"), Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<IEnumerable<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type, IFormFileCollection files)
     {
@@ -80,6 +79,24 @@ public class FileController : Controller
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     public async void Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
+        var identity = HttpContext.User.Identity as ClaimsIdentity;
+        if (identity == null)
+        {
+            Forbid();
+        }
+
+        IEnumerable<Claim> claims = identity.Claims; 
+        
+        if(identity.FindFirst("datasetIdentifier").Value != datasetIdentifier)
+        {
+            Forbid();
+        }
+
+        if(identity.FindFirst("versionNumber").Value != versionNumber)
+        {
+            Forbid();
+        }
+
         await storageService.DeleteFile(datasetIdentifier, versionNumber, type, filePath);
     }
 
