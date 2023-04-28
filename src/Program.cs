@@ -70,4 +70,14 @@ app.UseAuthentication();
 
 app.MapControllers();
 
+// Generate service token and print it to the terminal (for testing purposes)
+if(app.Environment.IsDevelopment())
+{
+    TokenService tokenService = new TokenService(builder.Configuration);
+    Console.WriteLine("ServiceToken:");
+    Console.WriteLine(tokenService.GetServiceToken());
+    Console.WriteLine("");
+}
+
+
 app.Run();

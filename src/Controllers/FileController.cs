@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Security.Claims;
 
 namespace DatasetFileUpload.Controllers;
 
@@ -31,6 +32,23 @@ public class FileController : Controller
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}"), Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<IEnumerable<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type, IFormFileCollection files)
     {
+        var identity = HttpContext.User.Identity as ClaimsIdentity;
+        if (identity == null)
+        {
+            Forbid();
+        }
+
+        IEnumerable<Claim> claims = identity.Claims; 
+        
+        if(identity.FindFirst("datasetIdentifier").Value != datasetIdentifier)
+        {
+            Forbid();
+        }
+
+        if(identity.FindFirst("versionNumber").Value != versionNumber)
+        {
+            Forbid();
+        }
 
         // check if user is authenticated 
 

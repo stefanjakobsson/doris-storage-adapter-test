@@ -6,6 +6,10 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+
 
 namespace DatasetFileUpload.Controllers;
 
@@ -20,10 +24,12 @@ public class ManifestController : Controller
         this.configuration = configuration;
     }
 
-    [HttpPost("/manifest/{datasetIdentifier}/{versionNumber}/manifest")]
+    [HttpPost("/manifest/{datasetIdentifier}/{versionNumber}/manifest"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public IActionResult CreateOrUpdateManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
     {
         logger.LogInformation($"Manifest (POST manifest datasetVersionIdentifier: {datasetIdentifier} version: {versionNumber}) ");
+
+        //TODO: store the updated manifest
 
         return Ok(new
         {
@@ -31,7 +37,7 @@ public class ManifestController : Controller
         });
     }
 
-    [HttpGet("/manifest/{datasetIdentifier}/{versionNumber}/files")]
+    [HttpGet("/manifest/{datasetIdentifier}/{versionNumber}/files"), , Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public IActionResult GetFiles(string datasetIdentifier, string versionNumber)
     {
 

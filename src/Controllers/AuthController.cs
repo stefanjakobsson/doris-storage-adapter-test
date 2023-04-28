@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Logging;
-using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
-
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 namespace DatasetFileUpload.Controllers;
 
 public class AuthController : Controller
@@ -25,31 +24,10 @@ public class AuthController : Controller
         this.tokenService = new TokenService(configuration);
     }
 
-    [HttpGet("token/{datasetIdentifier}/{versionNumber}")]
-    public async Task<string> GetUploadToken(string datasetIdentifier, string versionNumber)
+    [HttpPost("token/{datasetIdentifier}/{versionNumber}"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<string> GetUploadToken(string datasetIdentifier, string versionNumber, [FromBody] AuthInfo user)
     {
-        return CreateUploadToken(datasetIdentifier, versionNumber);
-    }
-
-    private string CreateUploadToken(string datasetIdentifier, string versionNumber)
-    {
-        List<Claim> claims = new List<Claim> {
-            new Claim(ClaimTypes.Role, "User"),
-            new Claim("DatasetIdentifier", datasetIdentifier),
-            new Claim("VersionNumber", versionNumber)
-        };
-
-        var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(configuration.GetSection("AppSettings:SigningKey").Value!));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
-
-        var token = new JwtSecurityToken(
-            claims: claims,
-            expires: DateTime.Now.AddHours(12),
-            signingCredentials: credentials
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return tokenService.GetUploadToken(user, datasetIdentifier, versionNumber);
     }
 
 }

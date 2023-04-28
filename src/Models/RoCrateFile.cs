@@ -1,7 +1,6 @@
 namespace DatasetFileUpload.Models;
 
 using System.Text.Json.Serialization;
-using System.Text.Json;
 
 public enum UploadType{
     Data,
