@@ -9,6 +9,7 @@ using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 
 namespace DatasetFileUpload.Controllers;
 
@@ -37,14 +38,14 @@ public class FileController : Controller
             Forbid();
         }
 
-        IEnumerable<Claim> claims = identity.Claims; 
+        IEnumerable<Claim> claims = identity!.Claims; 
         
-        if(identity.FindFirst("datasetIdentifier").Value != datasetIdentifier)
+        if(identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
         {
             Forbid();
         }
 
-        if(identity.FindFirst("versionNumber").Value != versionNumber)
+        if(identity.FindFirst("versionNumber")?.Value != versionNumber)
         {
             Forbid();
         }
@@ -85,14 +86,14 @@ public class FileController : Controller
             Forbid();
         }
 
-        IEnumerable<Claim> claims = identity.Claims; 
+        IEnumerable<Claim> claims = identity!.Claims; 
         
-        if(identity.FindFirst("datasetIdentifier").Value != datasetIdentifier)
+        if(identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
         {
             Forbid();
         }
 
-        if(identity.FindFirst("versionNumber").Value != versionNumber)
+        if(identity.FindFirst("versionNumber")?.Value != versionNumber)
         {
             Forbid();
         }
