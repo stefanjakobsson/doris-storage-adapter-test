@@ -32,5 +32,4 @@ public class AuthController : Controller
     {
         return tokenService.GetUploadToken(user, datasetIdentifier, versionNumber);
     }
-
 }

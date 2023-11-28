@@ -3,12 +3,15 @@ namespace DatasetFileUpload.Models;
 using System;
 using System.Text.Json.Serialization;
 
-public enum UploadType{
+public enum UploadType
+{
     Data,
     Documentation,
     Metadata
 }
-public class RoCrateFile{
+
+public class RoCrateFile
+{
     [JsonPropertyName("@type")]
     public string RdfType => "File";
     public string Id { get; set; } = "";

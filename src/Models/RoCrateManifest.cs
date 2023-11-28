@@ -1,10 +1,10 @@
 namespace DatasetFileUpload.Models;
 
-using System.Text.Json.Serialization;
 using System.Text.Json;
 
 
-public class RoCrateManifest{
+public class RoCrateManifest
+{
     private JsonDocument? manifest;
 
     public RoCrateManifest(string jsonString)

@@ -1,3 +1,4 @@
+using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers().AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-builder.Services.AddEndpointsApiExplorer();
+//builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options => {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
@@ -57,6 +58,8 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
 );
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddTransient<IStorageService, DiskStorageService>();
 
 var app = builder.Build();
 

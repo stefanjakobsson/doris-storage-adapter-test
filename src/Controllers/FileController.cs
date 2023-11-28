@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Net.Http.Headers;
+using Microsoft.AspNetCore.WebUtilities;
+using DatasetFileUpload.Controllers.Filters;
 
 namespace DatasetFileUpload.Controllers;
 
@@ -19,86 +22,108 @@ public class FileController : Controller
 {
     private readonly ILogger logger;
     private readonly IConfiguration configuration;
+    private readonly IStorageService storageService;
 
-    private IStorageService storageService;
-
-    public FileController(ILogger<FileController> logger, IConfiguration configuration)
+    public FileController(ILogger<FileController> logger, IConfiguration configuration, IStorageService storageService)
     {
         this.logger = logger;
         this.configuration = configuration;
-        this.storageService = new DiskStorageService();
+        this.storageService = storageService;
     }
 
-    [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}"), Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public async Task<IEnumerable<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type, IFormFileCollection files)
+    [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    // Disable form value model binding to ensure that files are not buffered
+    [DisableFormValueModelBinding]
+    // Disable request size limit to allow streaming large files
+    [DisableRequestSizeLimit]
+    public async Task<ActionResult<IEnumerable<RoCrateFile>>> Upload(string datasetIdentifier, string versionNumber, UploadType type)
     {
-        var identity = HttpContext.User.Identity as ClaimsIdentity;
-        if (identity == null)
+        if (HttpContext.User.Identity is not ClaimsIdentity identity)
         {
-            Forbid();
+            return Forbid();
         }
 
-        IEnumerable<Claim> claims = identity!.Claims; 
-        
-        if(identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
+        if (identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
         {
-            Forbid();
+            return Forbid();
         }
 
-        if(identity.FindFirst("versionNumber")?.Value != versionNumber)
+        if (identity.FindFirst("versionNumber")?.Value != versionNumber)
         {
-            Forbid();
+            return Forbid();
         }
-
-        // check if user is authenticated 
-
-        // check if user exist in manifest
 
         // check if current dataset version is not published (publicationDate is set in manifest)
 
         // if type === data check if manifest conditionsOfAccess is PUBLIC (file of type data needs to generate url)
 
-        List<RoCrateFile> roCrateFiles = new List<RoCrateFile>();
+        var request = HttpContext.Request;
 
-        foreach (IFormFile file in files){
-            logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {file.FileName}");
-            
-            // send file to storage service
-
-            roCrateFiles.Add(await storageService.StoreFile(datasetIdentifier, versionNumber, type, file, true));
-
-            // Base path for file based on dataset version and type of file
-            string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + type.ToString().ToLower();
-            
-            logger.LogInformation($"Store file {file.FileName} in \"{folderPath}/{file.FileName}\"");
+        // Validation of Content-Type:
+        // 1. It must be a form-data request
+        // 2. A boundary should be found in the Content-Type
+        if (!request.HasFormContentType ||
+            !MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaTypeHeader) ||
+            string.IsNullOrEmpty(mediaTypeHeader.Boundary.Value))
+        {
+            return new UnsupportedMediaTypeResult();
         }
 
-        return  roCrateFiles;
+        var boundary = HeaderUtilities.RemoveQuotes(mediaTypeHeader.Boundary.Value).Value!;
+        var reader = new MultipartReader(boundary, request.Body);
+        var section = await reader.ReadNextSectionAsync();
+
+        var roCrateFiles = new List<RoCrateFile>();
+
+        while (section != null)
+        {
+            if (ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition) &&
+                contentDisposition.DispositionType.Equals("form-data") &&
+                !string.IsNullOrEmpty(contentDisposition.FileName.Value))
+            {
+                string fileName = contentDisposition.FileName.Value;
+
+                logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {fileName}");
+
+                // send file to storage service
+
+                roCrateFiles.Add(await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, section.Body, true));
+
+                // Base path for file based on dataset version and type of file
+                string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + type.ToString().ToLower();
+
+                logger.LogInformation($"Store file {fileName} in \"{folderPath}/{fileName}\"");
+            }
+
+            section = await reader.ReadNextSectionAsync();
+        }
+
+        return roCrateFiles;
     }
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public async void Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
+    public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
-        var identity = HttpContext.User.Identity as ClaimsIdentity;
-        if (identity == null)
+        if (HttpContext.User.Identity is not ClaimsIdentity identity)
         {
-            Forbid();
+            return Forbid();
         }
 
-        IEnumerable<Claim> claims = identity!.Claims; 
-        
-        if(identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
+        if (identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
         {
-            Forbid();
+            return Forbid();
         }
 
-        if(identity.FindFirst("versionNumber")?.Value != versionNumber)
+        if (identity.FindFirst("versionNumber")?.Value != versionNumber)
         {
-            Forbid();
+            return Forbid();
         }
 
         await storageService.DeleteFile(datasetIdentifier, versionNumber, type, filePath);
+
+        return Ok();
     }
 
 }
