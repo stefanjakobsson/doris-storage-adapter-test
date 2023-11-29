@@ -17,10 +17,11 @@ public class TokenService
 
     public string GetUploadToken(AuthInfo user, string datasetIdentifier, string versionNumber)
     {
-        List<Claim> claims = new List<Claim> {
-            new Claim(ClaimTypes.Role, "User"),
-            new Claim("DatasetIdentifier", datasetIdentifier),
-            new Claim("VersionNumber", versionNumber)
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Role, "User"),
+            new("DatasetIdentifier", datasetIdentifier),
+            new("VersionNumber", versionNumber)
         };
 
         var key = new SymmetricSecurityKey(
@@ -38,8 +39,9 @@ public class TokenService
 
     public string GetServiceToken()
     {
-        List<Claim> claims = new List<Claim> {
-            new Claim(ClaimTypes.Role, "UploadService")
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Role, "UploadService")
         };
 
         var key = new SymmetricSecurityKey(

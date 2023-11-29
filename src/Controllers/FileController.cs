@@ -31,6 +31,11 @@ public class FileController : Controller
         this.storageService = storageService;
     }
 
+    private bool CheckClaims(string datasetIdentifier, string versionNumber) =>
+        HttpContext.User.Identity is ClaimsIdentity identity &&
+        identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier &&
+        identity.FindFirst("versionNumber")?.Value != versionNumber;
+
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     // Disable form value model binding to ensure that files are not buffered
@@ -39,17 +44,7 @@ public class FileController : Controller
     [DisableRequestSizeLimit]
     public async Task<ActionResult<IEnumerable<RoCrateFile>>> Upload(string datasetIdentifier, string versionNumber, UploadType type)
     {
-        if (HttpContext.User.Identity is not ClaimsIdentity identity)
-        {
-            return Forbid();
-        }
-
-        if (identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
-        {
-            return Forbid();
-        }
-
-        if (identity.FindFirst("versionNumber")?.Value != versionNumber)
+        if (!CheckClaims(datasetIdentifier, versionNumber))
         {
             return Forbid();
         }
@@ -106,17 +101,7 @@ public class FileController : Controller
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
-        if (HttpContext.User.Identity is not ClaimsIdentity identity)
-        {
-            return Forbid();
-        }
-
-        if (identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier)
-        {
-            return Forbid();
-        }
-
-        if (identity.FindFirst("versionNumber")?.Value != versionNumber)
+        if (!CheckClaims(datasetIdentifier, versionNumber))
         {
             return Forbid();
         }
