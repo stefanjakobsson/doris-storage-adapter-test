@@ -8,7 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
+using System;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
@@ -77,7 +79,14 @@ public class FileController : Controller
 
                 try
                 {
-                    return await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, section.Body, true);
+                    using var sha256 = SHA256.Create();
+                    using var hashStream = new CryptoStream(section.Body, sha256, CryptoStreamMode.Read);
+
+                    var result = await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, hashStream, true);
+
+                    result.Sha256 = Convert.ToHexString(sha256.Hash!);
+
+                    return result;
                 }
                 catch (IllegalFileNameException)
                 {
