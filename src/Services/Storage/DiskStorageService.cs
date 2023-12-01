@@ -1,16 +1,25 @@
+namespace DatasetFileUpload.Services.Storage;
+
 using DatasetFileUpload.Models;
-using DatasetFileUpload.Services.Storage;
+using Microsoft.Extensions.Configuration;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
 internal class DiskStorageService : IStorageService
 {
+    private readonly IConfiguration configuration;
+
+    public DiskStorageService(IConfiguration configuration)
+    {
+        this.configuration = configuration;
+    }
 
     public async Task StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
     {
-        // move base path to config
-        string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
+        string basePath = GetBasePath();
+        string path = Path.Combine(basePath, datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
 
         var fi = new FileInfo(path);
         fi.Directory?.Create();
@@ -21,8 +30,8 @@ internal class DiskStorageService : IStorageService
 
     public async Task<JsonDocument> GetManifest(string datasetIdentifier, string versionNumber)
     {
-        // move base path to config
-        string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
+        string basePath = GetBasePath();
+        string path = Path.Combine(basePath, datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
         if (File.Exists(path))
         {
             using FileStream stream = File.OpenRead(path);
@@ -32,35 +41,84 @@ internal class DiskStorageService : IStorageService
         throw new FileNotFoundException();
     }
 
-    public async Task<RoCrateFile> StoreFile(string datasetIdentifier, string versionNumber, UploadType type, string fileName, Stream stream, bool generateFileUrl)
+    public async Task<RoCrateFile> StoreFile(
+        string datasetIdentifier, 
+        string versionNumber,
+        UploadType type, 
+        string fileName, 
+        Stream data, 
+        bool generateFileUrl)
     {
-        // move base path to config
-        string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, type.ToString().ToLower(), fileName);
-        var fi = new FileInfo(path);
-        fi.Directory?.Create();
+        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber, type);
+        string filePath = GetFilePathOrThrow(fileName, basePath);
+        string directoryPath = Path.GetDirectoryName(filePath)!;
 
-        using var fileStream = new FileStream(path, FileMode.Create);
+        if (!Directory.Exists(directoryPath))
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
 
-        await stream.CopyToAsync(fileStream);
+        using var stream = new FileStream(filePath, FileMode.Create);
+        await data.CopyToAsync(stream);
 
-        
+        var fileInfo = new FileInfo(filePath);
 
         return new RoCrateFile
         {
-            Id = type.ToString().ToLower() + '/' + fileName, 
-            ContentSize = fi.Length,
-            DateCreated = fi.LastWriteTime
+            Id = Path.GetRelativePath(basePath, filePath), 
+            ContentSize = fileInfo.Length,
+            DateCreated = fileInfo.CreationTime.ToUniversalTime(),
+            DateModified = fileInfo.LastWriteTime.ToUniversalTime(),
+            EncodingFormat = null,
+            Sha256 = null,
+            Url = null
         };
     }
 
-    public async Task DeleteFile(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
+    public Task DeleteFile(
+        string datasetIdentifier, 
+        string versionNumber, 
+        UploadType type, 
+        string fileName)
     {
-        string path = Path.Combine("/var/data", datasetIdentifier, datasetIdentifier + '-' + versionNumber, type.ToString().ToLower(), filePath);
-        var fi = new FileInfo(path);
-        if (File.Exists(path))
+        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber, type);
+        string filePath = GetFilePathOrThrow(fileName, basePath);
+
+        File.Delete(filePath);
+
+        // Delete any empty subdirectories that result from deleting the file
+        DirectoryInfo? directory = new(Path.GetDirectoryName(filePath)!);
+        while 
+        (
+            directory != null &&
+            directory.FullName != basePath &&
+            !directory.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Any()
+        )
         {
-            await Task.Factory.StartNew(() => fi.Delete());
+            directory.Delete(false);
+            directory = directory.Parent;
         }
+
+        return Task.CompletedTask;
     }
 
+    private string GetBasePath() => Path.GetFullPath(configuration["Storage:DiskStorageService:BasePath"]!);
+
+    private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber) =>
+        Path.GetFullPath(Path.Combine(GetBasePath(), datasetIdentifier + '-' + versionNumber));
+
+    private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber, UploadType type) =>
+       Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), type.ToString().ToLower());
+
+    private static string GetFilePathOrThrow(string fileName, string basePath)
+    {
+        var filePath = Path.GetFullPath(fileName, basePath);
+
+        if (!filePath.StartsWith(basePath))
+        {
+            throw new IllegalFileNameException(fileName);
+        }
+
+        return filePath;
+    }
 }

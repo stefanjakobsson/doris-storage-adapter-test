@@ -1,18 +1,15 @@
-using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using Microsoft.Extensions.Configuration;
-using DatasetFileUpload.Models;
-using Microsoft.Extensions.Logging;
-using DatasetFileUpload.Services.Storage;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Net.Http.Headers;
-using Microsoft.AspNetCore.WebUtilities;
 using DatasetFileUpload.Controllers.Filters;
+using DatasetFileUpload.Models;
+using DatasetFileUpload.Services.Storage;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
 
@@ -21,20 +18,13 @@ namespace DatasetFileUpload.Controllers;
 public class FileController : Controller
 {
     private readonly ILogger logger;
-    private readonly IConfiguration configuration;
     private readonly IStorageService storageService;
 
-    public FileController(ILogger<FileController> logger, IConfiguration configuration, IStorageService storageService)
+    public FileController(ILogger<FileController> logger, IStorageService storageService)
     {
         this.logger = logger;
-        this.configuration = configuration;
         this.storageService = storageService;
     }
-
-    private bool CheckClaims(string datasetIdentifier, string versionNumber) =>
-        HttpContext.User.Identity is ClaimsIdentity identity &&
-        identity.FindFirst("DatasetIdentifier")?.Value == datasetIdentifier &&
-        identity.FindFirst("VersionNumber")?.Value == versionNumber;
 
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
@@ -42,7 +32,7 @@ public class FileController : Controller
     [DisableFormValueModelBinding]
     // Disable request size limit to allow streaming large files
     [DisableRequestSizeLimit]
-    public async Task<ActionResult<IEnumerable<RoCrateFile>>> Upload(string datasetIdentifier, string versionNumber, UploadType type)
+    public async Task<ActionResult<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type)
     {
         if (!CheckClaims(datasetIdentifier, versionNumber))
         {
@@ -69,8 +59,6 @@ public class FileController : Controller
         var reader = new MultipartReader(boundary, request.Body);
         var section = await reader.ReadNextSectionAsync();
 
-        var roCrateFiles = new List<RoCrateFile>();
-
         while (section != null)
         {
             if (ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition) &&
@@ -79,26 +67,33 @@ public class FileController : Controller
             {
                 string fileName = contentDisposition.FileName.Value;
 
-                logger.LogInformation($"Upload POST upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {fileName}");
+                if (!CheckFileName(fileName))
+                {
+                    return IllegalFileNameResult();
+                }
 
-                // send file to storage service
+                logger.LogInformation("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {fileName}", 
+                    datasetIdentifier, versionNumber, fileName);
 
-                roCrateFiles.Add(await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, section.Body, true));
-
-                // Base path for file based on dataset version and type of file
-                string folderPath = datasetIdentifier + "/" + datasetIdentifier + "-" + versionNumber + "/" + type.ToString().ToLower();
-
-                logger.LogInformation($"Store file {fileName} in \"{folderPath}/{fileName}\"");
+                try
+                {
+                    return await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, section.Body, true);
+                }
+                catch (IllegalFileNameException)
+                {
+                    return IllegalFileNameResult();
+                }
             }
 
             section = await reader.ReadNextSectionAsync();
         }
 
-        return roCrateFiles;
+        return Problem("No file posted.", statusCode: 400);
     }
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
         if (!CheckClaims(datasetIdentifier, versionNumber))
@@ -106,9 +101,41 @@ public class FileController : Controller
             return Forbid();
         }
 
-        await storageService.DeleteFile(datasetIdentifier, versionNumber, type, filePath);
+        logger.LogInformation("Delete datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, filePath: {filePath}", 
+            datasetIdentifier, versionNumber, filePath);
+
+        try
+        {
+            await storageService.DeleteFile(datasetIdentifier, versionNumber, type, filePath);
+        }
+        catch (IllegalFileNameException)
+        {
+            return IllegalFileNameResult();
+        }
 
         return Ok();
     }
 
+    private bool CheckClaims(string datasetIdentifier, string versionNumber) =>
+        HttpContext.User.Identity is ClaimsIdentity identity &&
+        identity.FindFirst("DatasetIdentifier")?.Value == datasetIdentifier &&
+        identity.FindFirst("VersionNumber")?.Value == versionNumber;
+
+    private static bool CheckFileName(string fileName)
+    {
+        foreach (string pathComponent in fileName.Split('/'))
+        {
+            if (pathComponent == "" ||
+                pathComponent == "." ||
+                pathComponent == "..")
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private ObjectResult IllegalFileNameResult() =>
+        Problem("Illegal file name.", statusCode: 400);
 }
