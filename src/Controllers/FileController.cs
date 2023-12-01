@@ -33,8 +33,8 @@ public class FileController : Controller
 
     private bool CheckClaims(string datasetIdentifier, string versionNumber) =>
         HttpContext.User.Identity is ClaimsIdentity identity &&
-        identity.FindFirst("datasetIdentifier")?.Value != datasetIdentifier &&
-        identity.FindFirst("versionNumber")?.Value != versionNumber;
+        identity.FindFirst("DatasetIdentifier")?.Value == datasetIdentifier &&
+        identity.FindFirst("VersionNumber")?.Value == versionNumber;
 
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
