@@ -4,11 +4,13 @@ using DatasetFileUpload.Models;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
+using System.Text;
 using System.Threading.Tasks;
 
 internal class DiskStorageService : IStorageService
 {
+    private const string roCrateMetadataFileName = "ro-crate-metadata.json";
+
     private readonly IConfiguration configuration;
 
     public DiskStorageService(IConfiguration configuration)
@@ -16,29 +18,23 @@ internal class DiskStorageService : IStorageService
         this.configuration = configuration;
     }
 
-    public async Task StoreManifest(string datasetIdentifier, string versionNumber, JsonDocument manifest)
+    public async Task StoreRoCrateMetadata(string datasetIdentifier, string versionNumber, string metadata)
     {
-        string basePath = GetBasePath();
-        string path = Path.Combine(basePath, datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
+        string path = GetRoCrateMetadataPath(datasetIdentifier, versionNumber);
 
-        var fi = new FileInfo(path);
-        fi.Directory?.Create();
-
-        using var fileStream = new FileStream(path, FileMode.Create);
-        await JsonSerializer.SerializeAsync(fileStream, manifest);
+        await File.WriteAllTextAsync(path, metadata, new UTF8Encoding(false));
     }
 
-    public async Task<JsonDocument> GetManifest(string datasetIdentifier, string versionNumber)
+    public async Task<string?> GetRoCrateMetadata(string datasetIdentifier, string versionNumber)
     {
-        string basePath = GetBasePath();
-        string path = Path.Combine(basePath, datasetIdentifier, datasetIdentifier + '-' + versionNumber, "metadata", "ro-crate-metadata-json");
+        string path = GetRoCrateMetadataPath(datasetIdentifier, versionNumber);
+
         if (File.Exists(path))
         {
-            using FileStream stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<JsonDocument>(stream) ?? JsonDocument.Parse("{}");
+            return await File.ReadAllTextAsync(path, new UTF8Encoding(false));
         }
 
-        throw new FileNotFoundException();
+        return null;
     }
 
     public async Task<RoCrateFile> StoreFile(
@@ -109,6 +105,9 @@ internal class DiskStorageService : IStorageService
 
     private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber, UploadType type) =>
        Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), type.ToString().ToLower());
+
+    private string GetRoCrateMetadataPath(string datasetIdentifier, string versionNumber) =>
+        Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber, UploadType.Metadata), roCrateMetadataFileName);
 
     private static string GetFilePathOrThrow(string fileName, string basePath)
     {

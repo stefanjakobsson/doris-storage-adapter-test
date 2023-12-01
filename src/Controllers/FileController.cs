@@ -39,9 +39,9 @@ public class FileController : Controller
             return Forbid();
         }
 
-        // check if current dataset version is not published (publicationDate is set in manifest)
+        // check if current dataset version is not published (publicationDate is set in RO-Crate metadata)
 
-        // if type === data check if manifest conditionsOfAccess is PUBLIC (file of type data needs to generate url)
+        // if type === data check if RO-Crate metadata conditionsOfAccess is PUBLIC (file of type data needs to generate url)
 
         var request = HttpContext.Request;
 
