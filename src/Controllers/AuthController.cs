@@ -21,12 +21,6 @@ public class AuthController : Controller
         this.tokenService = new TokenService(configuration);
     }
 
-    [HttpGet("token/check"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public IActionResult CheckToken()
-    {
-        return Ok();
-    }
-
     [HttpPost("token/{datasetIdentifier}/{versionNumber}"), Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<string> GetUploadToken(string datasetIdentifier, string versionNumber, [FromBody] AuthInfo user)
     {

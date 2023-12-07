@@ -82,7 +82,7 @@ public class FileController : Controller
                     using var sha256 = SHA256.Create();
                     using var hashStream = new CryptoStream(section.Body, sha256, CryptoStreamMode.Read);
 
-                    var result = await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, hashStream, true);
+                    var result = await storageService.StoreFile(datasetIdentifier, versionNumber, type, fileName, hashStream);
 
                     result.Sha256 = Convert.ToHexString(sha256.Hash!);
 

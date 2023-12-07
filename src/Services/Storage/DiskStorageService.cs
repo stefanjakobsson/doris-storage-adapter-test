@@ -2,6 +2,8 @@ namespace DatasetFileUpload.Services.Storage;
 
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -42,8 +44,7 @@ internal class DiskStorageService : IStorageService
         string versionNumber,
         UploadType type, 
         string fileName, 
-        Stream data, 
-        bool generateFileUrl)
+        Stream data)
     {
         string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber, type);
         string filePath = GetFilePathOrThrow(fileName, basePath);
@@ -98,16 +99,77 @@ internal class DiskStorageService : IStorageService
         return Task.CompletedTask;
     }
 
+    public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
+    {
+        // This is a hack to avoid warning CS1998 (async method without await)
+        await Task.CompletedTask;
+
+        static IEnumerable<FileInfo> EnumerateFiles(string path)
+        {
+            var directory = new DirectoryInfo(path);
+
+            if (!directory.Exists)
+            {
+                yield break;
+            }
+
+            foreach (var file in directory.EnumerateFiles())
+            {
+                yield return file;
+            }
+
+            foreach (var subDirectory in directory.EnumerateDirectories())
+            {
+                foreach (var file in EnumerateFiles(subDirectory.FullName))
+                {
+                    yield return file;
+                }
+            }
+        }
+
+        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
+
+        IEnumerable<FileInfo> EnumerateFilesForType(UploadType type) =>
+            EnumerateFiles(Path.Combine(basePath, GetPathForType(type)))
+            .OrderBy(f => f.FullName, StringComparer.InvariantCulture);
+
+        foreach (var type in new[] { UploadType.Data, UploadType.Documentation })
+        {
+            foreach (var file in EnumerateFilesForType(type))
+            {
+                var relativePath = Path.GetRelativePath(basePath, file.FullName);
+
+                if (Path.DirectorySeparatorChar != '/')
+                {
+                    relativePath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+                }
+
+                yield return new()
+                {
+                    Id = relativePath,
+                    ContentSize = file.Length,
+                    DateCreated = file.CreationTime.ToUniversalTime(),
+                    DateModified = file.LastWriteTime.ToUniversalTime(),
+                    EncodingFormat = null,
+                    Sha256 = null,
+                    Url = null
+                };
+            }
+        }
+    }
+
+    private static string GetPathForType(UploadType type) => type.ToString().ToLower();
+
     private string GetBasePath() => Path.GetFullPath(configuration["Storage:DiskStorageService:BasePath"]!);
 
     private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber) =>
         Path.GetFullPath(Path.Combine(GetBasePath(), datasetIdentifier + '-' + versionNumber));
 
     private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber, UploadType type) =>
-       Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), type.ToString().ToLower());
+       Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), GetPathForType(type));
 
     private string GetRoCrateMetadataPath(string datasetIdentifier, string versionNumber) =>
-        Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber, UploadType.Metadata), roCrateMetadataFileName);
+        Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), roCrateMetadataFileName);
 
     private static string GetFilePathOrThrow(string fileName, string basePath)
     {

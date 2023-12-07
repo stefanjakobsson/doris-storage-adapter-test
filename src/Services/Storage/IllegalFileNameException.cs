@@ -2,9 +2,7 @@
 
 namespace DatasetFileUpload.Services.Storage;
 
-public class IllegalFileNameException : Exception
+public class IllegalFileNameException(string fileName) : Exception
 {
-    public IllegalFileNameException(string fileName) => FileName = fileName;
-
-    public string FileName { get; }
+    public string FileName { get; } = fileName;
 }
