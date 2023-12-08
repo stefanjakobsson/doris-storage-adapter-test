@@ -1,5 +1,3 @@
-namespace DatasetFileUpload.Services.Storage;
-
 using DatasetFileUpload.Models;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -7,6 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
+namespace DatasetFileUpload.Services.Storage;
 
 // TODO How handle illegal file name characters, which are different on Windows/Linux?
 

@@ -7,6 +7,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
+namespace DatasetFileUpload.Services.Auth;
+
 public class TokenService
 {
     private readonly IConfiguration configuration;

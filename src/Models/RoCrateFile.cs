@@ -1,7 +1,7 @@
-namespace DatasetFileUpload.Models;
-
 using System;
 using System.Text.Json.Serialization;
+
+namespace DatasetFileUpload.Models;
 
 public class RoCrateFile
 {

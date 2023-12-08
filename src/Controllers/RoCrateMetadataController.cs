@@ -1,14 +1,12 @@
-namespace DatasetFileUpload.Controllers;
-
-using DatasetFileUpload.Models;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+
+namespace DatasetFileUpload.Controllers;
 
 [ApiController]
 [Authorize]

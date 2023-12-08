@@ -1,3 +1,5 @@
+namespace DatasetFileUpload.Services.Auth;
+
 public record AuthInfo(
     string? Email,
     string? EduPersonPrincipalName
