@@ -1,10 +1,12 @@
 namespace DatasetFileUpload.Controllers;
 
+using DatasetFileUpload.Models;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -28,15 +30,6 @@ public class RoCrateMetadataController : Controller
         logger.LogInformation("Update RO-Crate metadata datasetIdentifier: {datasetIdentifier} versionNumber: {versionNumber})",
             datasetIdentifier, versionNumber);
 
-        await storageService.StoreRoCrateMetadata(datasetIdentifier, versionNumber, metadata.RootElement.GetRawText());      
+        //<await storageService.StoreRoCrateMetadata(datasetIdentifier, versionNumber, metadata.RootElement.GetRawText());      
     }
-
-    [HttpGet("/metadata/{datasetIdentifier}/{versionNumber}/files")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public IActionResult GetFiles(string datasetIdentifier, string versionNumber)
-    {
-
-        return Ok(); //TODO: return manifest
-    }
-
 }

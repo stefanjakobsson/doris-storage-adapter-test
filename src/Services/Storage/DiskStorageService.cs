@@ -6,47 +6,34 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
-internal class DiskStorageService : IStorageService
+// TODO How handle illegal file name characters, which are different on Windows/Linux?
+
+internal class DiskStorageService(IConfiguration configuration) : IStorageService
 {
-    private const string roCrateMetadataFileName = "ro-crate-metadata.json";
+    private readonly IConfiguration configuration = configuration;
 
-    private readonly IConfiguration configuration;
-
-    public DiskStorageService(IConfiguration configuration)
+    public Task<Stream?> GetFileData(string datasetIdentifier, string versionNumber, string fileName)
     {
-        this.configuration = configuration;
-    }
+        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
+        string filePath = GetFilePathOrThrow(fileName, basePath);
 
-    public async Task StoreRoCrateMetadata(string datasetIdentifier, string versionNumber, string metadata)
-    {
-        string path = GetRoCrateMetadataPath(datasetIdentifier, versionNumber);
-
-        await File.WriteAllTextAsync(path, metadata, new UTF8Encoding(false));
-    }
-
-    public async Task<string?> GetRoCrateMetadata(string datasetIdentifier, string versionNumber)
-    {
-        string path = GetRoCrateMetadataPath(datasetIdentifier, versionNumber);
-
-        if (File.Exists(path))
+        if (!File.Exists(filePath))
         {
-            return await File.ReadAllTextAsync(path, new UTF8Encoding(false));
+            return Task.FromResult<Stream?>(null);
         }
 
-        return null;
+        return Task.FromResult<Stream?>(new FileStream(filePath, FileMode.Open, FileAccess.Read));
     }
 
     public async Task<RoCrateFile> StoreFile(
         string datasetIdentifier, 
         string versionNumber,
-        UploadType type, 
         string fileName, 
         Stream data)
     {
-        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber, type);
+        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
         string filePath = GetFilePathOrThrow(fileName, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
@@ -62,7 +49,7 @@ internal class DiskStorageService : IStorageService
 
         return new RoCrateFile
         {
-            Id = Path.GetRelativePath(basePath, filePath), 
+            Id = NormalizePath(Path.GetRelativePath(basePath, filePath)), 
             ContentSize = fileInfo.Length,
             DateCreated = fileInfo.CreationTime.ToUniversalTime(),
             DateModified = fileInfo.LastWriteTime.ToUniversalTime(),
@@ -74,12 +61,16 @@ internal class DiskStorageService : IStorageService
 
     public Task DeleteFile(
         string datasetIdentifier, 
-        string versionNumber, 
-        UploadType type, 
+        string versionNumber,
         string fileName)
     {
-        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber, type);
+        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
         string filePath = GetFilePathOrThrow(fileName, basePath);
+
+        if (!File.Exists(filePath))
+        {
+            return Task.CompletedTask;
+        }
 
         File.Delete(filePath);
 
@@ -139,14 +130,9 @@ internal class DiskStorageService : IStorageService
             {
                 var relativePath = Path.GetRelativePath(basePath, file.FullName);
 
-                if (Path.DirectorySeparatorChar != '/')
-                {
-                    relativePath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
-                }
-
                 yield return new()
                 {
-                    Id = relativePath,
+                    Id = NormalizePath(relativePath),
                     ContentSize = file.Length,
                     DateCreated = file.CreationTime.ToUniversalTime(),
                     DateModified = file.LastWriteTime.ToUniversalTime(),
@@ -163,13 +149,7 @@ internal class DiskStorageService : IStorageService
     private string GetBasePath() => Path.GetFullPath(configuration["Storage:DiskStorageService:BasePath"]!);
 
     private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber) =>
-        Path.GetFullPath(Path.Combine(GetBasePath(), datasetIdentifier + '-' + versionNumber));
-
-    private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber, UploadType type) =>
-       Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), GetPathForType(type));
-
-    private string GetRoCrateMetadataPath(string datasetIdentifier, string versionNumber) =>
-        Path.Combine(GetDatasetVersionPath(datasetIdentifier, versionNumber), roCrateMetadataFileName);
+        Path.GetFullPath(Path.Combine(GetBasePath(), datasetIdentifier, datasetIdentifier + '-' + versionNumber));
 
     private static string GetFilePathOrThrow(string fileName, string basePath)
     {
@@ -181,5 +161,15 @@ internal class DiskStorageService : IStorageService
         }
 
         return filePath;
+    }
+
+    private static string NormalizePath(string path)
+    {
+        if (Path.DirectorySeparatorChar != '/')
+        {
+            return path.Replace(Path.DirectorySeparatorChar, '/');
+        }
+
+        return path;
     }
 }
