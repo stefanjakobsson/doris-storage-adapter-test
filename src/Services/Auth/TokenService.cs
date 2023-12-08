@@ -1,3 +1,4 @@
+using DatasetFileUpload.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System;
@@ -15,13 +16,13 @@ public class TokenService
         this.configuration = configuration;
     }
 
-    public string GetUploadToken(AuthInfo user, string datasetIdentifier, string versionNumber)
+    public string GetUploadToken(AuthInfo user, DatasetVersionIdentifier datasetVersion)
     {
         var claims = new List<Claim>
         {
             new(ClaimTypes.Role, "User"),
-            new("DatasetIdentifier", datasetIdentifier),
-            new("VersionNumber", versionNumber)
+            new("DatasetIdentifier", datasetVersion.DatasetIdentifier),
+            new("VersionNumber", datasetVersion.VersionNumber)
         };
 
         var key = new SymmetricSecurityKey(

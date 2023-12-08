@@ -14,9 +14,9 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 {
     private readonly IConfiguration configuration = configuration;
 
-    public Task<Stream?> GetFileData(string datasetIdentifier, string versionNumber, string fileName)
+    public Task<Stream?> GetFileData(DatasetVersionIdentifier datasetVersion, string fileName)
     {
-        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
+        string basePath = GetDatasetVersionPath(datasetVersion);
         string filePath = GetFilePathOrThrow(fileName, basePath);
 
         if (!File.Exists(filePath))
@@ -27,13 +27,9 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         return Task.FromResult<Stream?>(new FileStream(filePath, FileMode.Open, FileAccess.Read));
     }
 
-    public async Task<RoCrateFile> StoreFile(
-        string datasetIdentifier, 
-        string versionNumber,
-        string fileName, 
-        Stream data)
+    public async Task<RoCrateFile> StoreFile(DatasetVersionIdentifier datasetVersion, string fileName, Stream data)
     {
-        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
+        string basePath = GetDatasetVersionPath(datasetVersion);
         string filePath = GetFilePathOrThrow(fileName, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
@@ -59,12 +55,9 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         };
     }
 
-    public Task DeleteFile(
-        string datasetIdentifier, 
-        string versionNumber,
-        string fileName)
+    public Task DeleteFile(DatasetVersionIdentifier datasetVersion, string fileName)
     {
-        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
+        string basePath = GetDatasetVersionPath(datasetVersion);
         string filePath = GetFilePathOrThrow(fileName, basePath);
 
         if (!File.Exists(filePath))
@@ -90,7 +83,7 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
+    public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
     {
         // This is a hack to avoid warning CS1998 (async method without await)
         await Task.CompletedTask;
@@ -118,7 +111,7 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
             }
         }
 
-        string basePath = GetDatasetVersionPath(datasetIdentifier, versionNumber);
+        string basePath = GetDatasetVersionPath(datasetVersion);
 
         IEnumerable<FileInfo> EnumerateFilesForType(UploadType type) =>
             EnumerateFiles(Path.Combine(basePath, GetPathForType(type)))
@@ -148,12 +141,13 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 
     private string GetBasePath() => Path.GetFullPath(configuration["Storage:DiskStorageService:BasePath"]!);
 
-    private string GetDatasetVersionPath(string datasetIdentifier, string versionNumber) =>
-        Path.GetFullPath(Path.Combine(GetBasePath(), datasetIdentifier, datasetIdentifier + '-' + versionNumber));
+    private string GetDatasetVersionPath(DatasetVersionIdentifier datasetVersion) =>
+        Path.GetFullPath(Path.Combine(
+            GetBasePath(), datasetVersion.DatasetIdentifier, datasetVersion.DatasetIdentifier + '-' + datasetVersion.VersionNumber));
 
     private static string GetFilePathOrThrow(string fileName, string basePath)
     {
-        var filePath = Path.GetFullPath(fileName, basePath);
+        string filePath = Path.GetFullPath(fileName, basePath);
 
         if (!filePath.StartsWith(basePath))
         {

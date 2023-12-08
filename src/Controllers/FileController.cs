@@ -11,7 +11,6 @@ using Microsoft.Net.Http.Headers;
 using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
@@ -23,19 +22,13 @@ namespace DatasetFileUpload.Controllers;
 
 [ApiController]
 [Authorize]
-public class FileController : Controller
+public class FileController(ILogger<FileController> logger, IStorageService storageService) : Controller
 {
     private const string payloadManifestSha256FileName = "manifest-sha256.txt";
     private const string tagManifestSha256FileName = "tagmanifest-sha256.txt";
 
-    private readonly ILogger logger;
-    private readonly IStorageService storageService;
-
-    public FileController(ILogger<FileController> logger, IStorageService storageService)
-    {
-        this.logger = logger;
-        this.storageService = storageService;
-    }
+    private readonly ILogger logger = logger;
+    private readonly IStorageService storageService = storageService;
 
     [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
@@ -45,7 +38,9 @@ public class FileController : Controller
     [DisableRequestSizeLimit]
     public async Task<ActionResult<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type)
     {
-        if (!CheckClaims(datasetIdentifier, versionNumber))
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        if (!CheckClaims(datasetVersion))
         {
             return Forbid();
         }
@@ -100,9 +95,9 @@ public class FileController : Controller
                         bytesRead += e.Count;
                     };
 
-                    var result = await storageService.StoreFile(datasetIdentifier, versionNumber, fileName, monitoringStream);
+                    var result = await storageService.StoreFile(datasetVersion, fileName, monitoringStream);
 
-                    await UpdateManifestSha256File(datasetIdentifier, versionNumber, result.Id, sha256.Hash!);
+                    await UpdateManifestSha256File(datasetVersion, result.Id, sha256.Hash!);
 
                     //result.Id = fileName; ??
                     result.ContentSize = bytesRead;
@@ -129,7 +124,9 @@ public class FileController : Controller
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string fileName)
     {
-        if (!CheckClaims(datasetIdentifier, versionNumber))
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        
+        if (!CheckClaims(datasetVersion))
         {
             return Forbid();
         }
@@ -146,8 +143,8 @@ public class FileController : Controller
 
         try
         {
-            await storageService.DeleteFile(datasetIdentifier, versionNumber, fileName);
-            await UpdateManifestSha256File(datasetIdentifier, versionNumber, fileName, null);
+            await storageService.DeleteFile(datasetVersion, fileName);
+            await UpdateManifestSha256File(datasetVersion, fileName, null);
         }
         catch (IllegalFileNameException)
         {
@@ -161,13 +158,15 @@ public class FileController : Controller
     [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
     {
-        var payloadChecksums = await GetManifestSha256Values(datasetIdentifier, versionNumber, true);
-        var tagChecksums = await GetManifestSha256Values(datasetIdentifier, versionNumber, false);
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        var payloadChecksums = await GetManifestSha256Values(datasetVersion, true);
+        var tagChecksums = await GetManifestSha256Values(datasetVersion, false);
 
         static string? GetChecksum(IDictionary<string, string> manifest, string fileName) =>
             manifest.TryGetValue(fileName, out string? value) ? value : null;
 
-        await foreach (var file in storageService.ListFiles(datasetIdentifier, versionNumber))
+        await foreach (var file in storageService.ListFiles(datasetVersion))
         {
             if (file.Id.StartsWith("data/"))
             {
@@ -182,10 +181,10 @@ public class FileController : Controller
         }
     }
 
-    private bool CheckClaims(string datasetIdentifier, string versionNumber) =>
+    private bool CheckClaims(DatasetVersionIdentifier datasetVersion) =>
         HttpContext.User.Identity is ClaimsIdentity identity &&
-        identity.FindFirst("DatasetIdentifier")?.Value == datasetIdentifier &&
-        identity.FindFirst("VersionNumber")?.Value == versionNumber;
+        identity.FindFirst("DatasetIdentifier")?.Value == datasetVersion.DatasetIdentifier &&
+        identity.FindFirst("VersionNumber")?.Value == datasetVersion.VersionNumber;
 
     private static bool CheckFileName(string fileName)
     {
@@ -205,15 +204,11 @@ public class FileController : Controller
     private ObjectResult IllegalFileNameResult() =>
         Problem("Illegal file name.", statusCode: 400);
 
-    [return: NotNull]
-    private async Task<IDictionary<string, string>> GetManifestSha256Values(
-        string datasetIdentifier, 
-        string versionNumber,
-        bool payloadManifest)
+    private async Task<IDictionary<string, string>> GetManifestSha256Values(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
         var result = new Dictionary<string, string>();
 
-        var stream = await storageService.GetFileData(datasetIdentifier, versionNumber,
+        var stream = await storageService.GetFileData(datasetVersion,
             payloadManifest ? payloadManifestSha256FileName : tagManifestSha256FileName);
 
         if (stream == null)
@@ -235,11 +230,7 @@ public class FileController : Controller
         return result;
     }
 
-    private async Task UpdateManifestSha256File(
-        string datasetIdentifier, 
-        string versionNumber,
-        string filePath, 
-        byte[]? sha256Hash)
+    private async Task UpdateManifestSha256File(DatasetVersionIdentifier datasetVersion, string filePath, byte[]? sha256Hash)
     {
         static string PercentEncodePath(string path)
         {
@@ -250,7 +241,7 @@ public class FileController : Controller
         }
 
         bool payloadManifest = filePath.StartsWith("data/");
-        var values = await GetManifestSha256Values(datasetIdentifier, versionNumber, payloadManifest);
+        var values = await GetManifestSha256Values(datasetVersion, payloadManifest);
         var encodedFilePath = PercentEncodePath(filePath);
 
         if (sha256Hash != null)
@@ -268,11 +259,11 @@ public class FileController : Controller
         {
             var newContent = Encoding.UTF8.GetBytes(string.Join("\n", values.Select(k => k.Value + " " + k.Key)));
 
-            await storageService.StoreFile(datasetIdentifier, versionNumber, manifestFilePath, new MemoryStream(newContent));
+            await storageService.StoreFile(datasetVersion, manifestFilePath, new MemoryStream(newContent));
         }
         else
         {
-            await storageService.DeleteFile(datasetIdentifier, versionNumber, manifestFilePath);
+            await storageService.DeleteFile(datasetVersion, manifestFilePath);
         }
     }
 }
