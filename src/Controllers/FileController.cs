@@ -21,7 +21,6 @@ using System.Threading.Tasks;
 namespace DatasetFileUpload.Controllers;
 
 [ApiController]
-[Authorize]
 public class FileController(ILogger<FileController> logger, IStorageService storageService) : Controller
 {
     private const string payloadManifestSha256FileName = "manifest-sha256.txt";
@@ -78,9 +77,9 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                     return IllegalFileNameResult();
                 }
 
-                fileName = type.ToString().ToLower() + "/" + fileName;
+                fileName = GetFileName(fileName, type);
 
-                logger.LogInformation("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {fileName}", 
+                logger.LogInformation("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {fileName}",
                     datasetIdentifier, versionNumber, fileName);
 
                 try
@@ -125,7 +124,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string fileName)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
-        
+
         if (!CheckClaims(datasetVersion))
         {
             return Forbid();
@@ -136,9 +135,9 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
             return IllegalFileNameResult();
         }
 
-        fileName = type.ToString().ToLower() + "/" + fileName;
+        fileName = GetFileName(fileName, type);
 
-        logger.LogInformation("Delete datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, fileName: {fileName}", 
+        logger.LogInformation("Delete datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, fileName: {fileName}",
             datasetIdentifier, versionNumber, fileName);
 
         try
@@ -181,6 +180,28 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         }
     }
 
+    [HttpGet("/file/{datasetIdentifier}/{versionNumber}/{type}")]
+    public async Task<IActionResult> GetData(string datasetIdentifier, string versionNumber, UploadType type, string fileName)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        if (!CheckFileName(fileName))
+        {
+            return IllegalFileNameResult();
+        }
+
+        fileName = GetFileName(fileName, type);
+
+        var stream = await storageService.GetFileData(datasetVersion, fileName);
+
+        if (stream == null)
+        {
+            return NotFound();
+        }
+
+        return File(stream, "application/octet-stream", fileName);
+    }
+
     private bool CheckClaims(DatasetVersionIdentifier datasetVersion) =>
         HttpContext.User.Identity is ClaimsIdentity identity &&
         identity.FindFirst("DatasetIdentifier")?.Value == datasetVersion.DatasetIdentifier &&
@@ -203,6 +224,10 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
     private ObjectResult IllegalFileNameResult() =>
         Problem("Illegal file name.", statusCode: 400);
+
+    private static string GetFileName(string fileName, UploadType type) =>
+        type.ToString().ToLower() + '/' + fileName;
+
 
     private async Task<IDictionary<string, string>> GetManifestSha256Values(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
