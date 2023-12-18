@@ -14,17 +14,18 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 {
     private readonly IConfiguration configuration = configuration;
 
-    public Task<Stream?> GetFileData(DatasetVersionIdentifier datasetVersion, string fileName)
+    public Task<StreamWithLength?> GetFileData(DatasetVersionIdentifier datasetVersion, string fileName)
     {
         string basePath = GetDatasetVersionPath(datasetVersion);
         string filePath = GetFilePathOrThrow(fileName, basePath);
 
         if (!File.Exists(filePath))
         {
-            return Task.FromResult<Stream?>(null);
+            return Task.FromResult<StreamWithLength?>(null);
         }
 
-        return Task.FromResult<Stream?>(new FileStream(filePath, FileMode.Open, FileAccess.Read));
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
     }
 
     public async Task<RoCrateFile> StoreFile(DatasetVersionIdentifier datasetVersion, string fileName, Stream data)

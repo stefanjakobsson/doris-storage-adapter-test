@@ -192,14 +192,16 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         fileName = GetFileName(fileName, type);
 
-        var stream = await storageService.GetFileData(datasetVersion, fileName);
+        var fileData = await storageService.GetFileData(datasetVersion, fileName);
 
-        if (stream == null)
+        if (fileData == null)
         {
             return NotFound();
         }
 
-        return File(stream, "application/octet-stream", fileName);
+        Response.Headers.ContentLength = fileData.Length;
+
+        return File(fileData.Stream, "application/octet-stream", fileName);
     }
 
     private bool CheckClaims(DatasetVersionIdentifier datasetVersion) =>
@@ -233,15 +235,15 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     {
         var result = new Dictionary<string, string>();
 
-        var stream = await storageService.GetFileData(datasetVersion,
+        var fileData = await storageService.GetFileData(datasetVersion,
             payloadManifest ? payloadManifestSha256FileName : tagManifestSha256FileName);
 
-        if (stream == null)
+        if (fileData == null)
         {
             return result;
         }
 
-        using var reader = new StreamReader(stream, Encoding.UTF8);
+        using var reader = new StreamReader(fileData.Stream, Encoding.UTF8);
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {

@@ -7,7 +7,7 @@ namespace DatasetFileUpload.Services.Storage;
 
 public interface IStorageService
 {
-    public Task<Stream?> GetFileData(DatasetVersionIdentifier datasetVersion, string fileName);
+    public Task<StreamWithLength?> GetFileData(DatasetVersionIdentifier datasetVersion, string fileName);
 
     public Task<RoCrateFile> StoreFile(DatasetVersionIdentifier datasetVersion, string fileName, Stream stream);
 
