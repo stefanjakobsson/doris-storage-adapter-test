@@ -19,7 +19,7 @@ public class AuthController(ILogger<AuthController> logger, IConfiguration confi
 
     [HttpPost("token/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public async Task<string> GetUploadToken(string datasetIdentifier, string versionNumber, [FromBody] AuthInfo user)
+    public string GetUploadToken(string datasetIdentifier, string versionNumber, [FromBody] AuthInfo user)
     {
         return tokenService.GetUploadToken(user, new DatasetVersionIdentifier(datasetIdentifier, versionNumber));
     }
