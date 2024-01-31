@@ -9,8 +9,8 @@ namespace DatasetFileUpload.Models.BagIt;
 
 public class BagItManifest
 {
-    private readonly Dictionary<string, byte[]> fileNameToChecksum = [];
-    private readonly Dictionary<byte[], HashSet<string>> checksumToFileNames = new(ByteArrayComparer.Default);
+    private readonly Dictionary<string, BagItManifestItem> items = [];
+    private readonly Dictionary<byte[], List<BagItManifestItem>> checksumToItems = new(ByteArrayComparer.Default);
 
     public static async Task<BagItManifest> Parse(Stream stream)
     {
@@ -30,70 +30,74 @@ public class BagItManifest
         {
             int index = line.IndexOf(' ');
             string checksum = line[..index];
-            string fileName = DecodePath(line[(index + 1)..]);
+            string filePath = DecodePath(line[(index + 1)..]);
 
-            result.SetChecksum(fileName, Convert.FromHexString(checksum));
+            result.AddOrUpdateItem(new()
+            {
+                Checksum = Convert.FromHexString(checksum),
+                FilePath = filePath
+            });
         }
 
         return result;
     }
 
-    public bool TryGetChecksum(string fileName, out byte[] checksum)
+    public bool TryGetItem(string filePath, out BagItManifestItem item)
     {
-        if (fileNameToChecksum.TryGetValue(fileName, out byte[]? value))
+        if (items.TryGetValue(filePath, out var value))
         {
-            checksum = value;
+            item = value;
             return true;
         }
 
-        checksum = [];
+        item = new() { Checksum = [], FilePath = "" };
         return false;
     }
 
-    public bool TryGetFileNames(byte[] checksum, out IEnumerable<string> fileNames)
+    public IEnumerable<BagItManifestItem> GetItemsByChecksum(byte[] checksum)
     {
-        if (checksumToFileNames.TryGetValue(checksum, out HashSet<string>? value))
+        if (checksumToItems.TryGetValue(checksum, out var items))
         {
-            fileNames = value;
-            return true;
+            return items;
         }
 
-        fileNames = [];
-        return false;
+        return [];
     }
 
-    public void SetChecksum(string fileName, byte[] checksum)
+    public void AddOrUpdateItem(BagItManifestItem item)
     {
-        if (TryGetChecksum(fileName, out byte[] oldChecksum))
+        if (TryGetItem(item.FilePath, out var existingItem))
         {
-            checksumToFileNames[oldChecksum].Remove(fileName);
+            checksumToItems[existingItem.Checksum].Remove(existingItem);
         }
 
-        fileNameToChecksum[fileName] = checksum;
+        items[item.FilePath] = item;
 
-        if (checksumToFileNames.TryGetValue(checksum, out HashSet<string>? fileNames))
+        if (checksumToItems.TryGetValue(item.Checksum, out var values))
         {
-            fileNames.Add(fileName);
+            values.Add(item);
         }
         else
         {
-            checksumToFileNames[checksum] = [ fileName ];
+            checksumToItems[item.Checksum] = [item];
         }
     }
 
-    public void RemoveChecksum(string fileName)
+    public bool RemoveItem(string filePath)
     {
-        if (TryGetChecksum(fileName, out byte[] checksum))
+        if (TryGetItem(filePath, out var item))
         {
-            var files = checksumToFileNames[checksum];
-            files.Remove(fileName);
-            if (files.Count == 0)
+            if (checksumToItems.TryGetValue(item.Checksum, out var values))
             {
-                checksumToFileNames.Remove(checksum);
+                values.Remove(item);
             }
+
+            items.Remove(filePath);
+
+            return true;
         }
 
-        fileNameToChecksum.Remove(fileName);
+        return false;
     }
 
     // Maybe serialize to stream here instead?
@@ -107,10 +111,10 @@ public class BagItManifest
                 .Replace("\r", "%0D");
         }
 
-        var values = fileNameToChecksum.Select(k => Convert.ToHexString(k.Value) + " " + EncodePath(k.Key));
+        var values = items.Select(i => Convert.ToHexString(i.Value.Checksum) + " " + EncodePath(i.Value.FilePath));
 
         return Encoding.UTF8.GetBytes(string.Join("\n", values));
     }
 
-    public bool IsEmpty() => fileNameToChecksum.Count == 0;
+    public IEnumerable<BagItManifestItem> Items => items.Values;
 }

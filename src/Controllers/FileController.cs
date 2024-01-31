@@ -16,7 +16,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
@@ -132,7 +131,11 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                     // Ha ett gemensamt manifest, eller kanske titta på föregående versions manifest?
                     // Iterera över alla versioners manifest, blir inte skalbart?
 
-                    await UpdateManifestSha256File(datasetVersion, result.Id, sha256.Hash!);
+                    await AddOrUpdateManifestItem(datasetVersion, new()
+                    {
+                        FilePath = result.Id, 
+                        Checksum = sha256.Hash!
+                    });
 
                     //result.Id = fileName; ??
                     result.ContentSize = bytesRead;
@@ -179,7 +182,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         try
         {
             await storageService.DeleteFile(datasetVersion, fileName);
-            await UpdateManifestSha256File(datasetVersion, fileName, null);
+            await RemoveItemFromManifest(datasetVersion, fileName);
         }
         catch (IllegalFileNameException)
         {
@@ -195,11 +198,11 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        var payloadChecksums = await GetManifestSha256Values(datasetVersion, true);
-        var tagChecksums = await GetManifestSha256Values(datasetVersion, false);
+        var payloadChecksums = await LoadManifest(datasetVersion, true);
+        var tagChecksums = await LoadManifest(datasetVersion, false);
 
         static string? GetChecksum(BagItManifest manifest, string fileName) =>
-            manifest.TryGetChecksum(fileName, out byte[] value) ? Convert.ToHexString(value) : null;
+            manifest.TryGetItem(fileName, out var value) ? Convert.ToHexString(value.Checksum) : null;
 
         await foreach (var file in storageService.ListFiles(datasetVersion))
         {
@@ -267,10 +270,9 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         type.ToString().ToLower() + '/' + fileName;
 
 
-    private async Task<BagItManifest> GetManifestSha256Values(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
+    private async Task<BagItManifest> LoadManifest(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
-        var fileData = await storageService.GetFileData(datasetVersion,
-            payloadManifest ? payloadManifestSha256FileName : tagManifestSha256FileName);
+        var fileData = await storageService.GetFileData(datasetVersion, GetManifestFilePath(payloadManifest));
 
         if (fileData == null)
         {
@@ -280,29 +282,35 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         return await BagItManifest.Parse(fileData.Stream);
     }
 
-    private async Task UpdateManifestSha256File(DatasetVersionIdentifier datasetVersion, string filePath, byte[]? sha256Hash)
+    private async Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item)
+    {
+        bool payload = item.FilePath.StartsWith("data/");
+        var manifest = await LoadManifest(datasetVersion, payload);
+        manifest.AddOrUpdateItem(item);
+       
+        await StoreManifest(datasetVersion, payload, manifest);
+    }
+
+    private async Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath)
     {
         bool payloadManifest = filePath.StartsWith("data/");
-        var manifest = await GetManifestSha256Values(datasetVersion, payloadManifest);
+        var manifest = await LoadManifest(datasetVersion, payloadManifest);
 
-        if (sha256Hash == null)
+        if (manifest.RemoveItem(filePath))
         {
-            manifest.RemoveChecksum(filePath);
-        }
-        else
-        {
-            manifest.SetChecksum(filePath, sha256Hash);
-        }
-       
-        string manifestFilePath = payloadManifest ? payloadManifestSha256FileName : tagManifestSha256FileName;
-
-        if (manifest.IsEmpty())
-        {
-            await storageService.DeleteFile(datasetVersion, manifestFilePath);
-        }
-        else
-        {
-            await storageService.StoreFile(datasetVersion, manifestFilePath, new MemoryStream(manifest.Serialize()));
+            if (manifest.Items.Any())
+            {
+                await StoreManifest(datasetVersion, payloadManifest, manifest);
+            }
+            else
+            {
+                await storageService.DeleteFile(datasetVersion, GetManifestFilePath(payloadManifest));
+            }
         }
     }
+
+    private static string GetManifestFilePath(bool payload) => payload ? payloadManifestSha256FileName : tagManifestSha256FileName;
+
+    private Task<RoCrateFile> StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest) =>
+         storageService.StoreFile(datasetVersion, GetManifestFilePath(payload), new MemoryStream(manifest.Serialize()));
 }
