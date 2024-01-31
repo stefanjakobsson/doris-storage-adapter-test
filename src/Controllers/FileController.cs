@@ -1,5 +1,6 @@
 using DatasetFileUpload.Controllers.Filters;
 using DatasetFileUpload.Models;
+using DatasetFileUpload.Models.BagIt;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -96,6 +97,41 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
                     var result = await storageService.StoreFile(datasetVersion, fileName, monitoringStream);
 
+                    // Add file:
+                    // Check if result.Sha256 is in manifest
+                    //      Yes. Check if path is identical
+                    //          Yes. Check if path is in fetch.txt.
+                    //              Yes. Delete file.
+                    //              No. Do nothing.
+                    //          No. Add to fetch.txt and delete file.
+                    //      No. Update manifest and remove from fetch (if present).
+
+                    // Delete file:
+                    // Delete from disk.
+                    // Delete from manifest.
+                    // Delete from fetch.txt.
+
+                    // New version:
+                    // Copy manifest from previous version
+                    // Copy fetch.txt from previous version
+                    // Complete fetch.txt with references to files in manifest but not in fetch
+
+                    // Behöver struktur för att hämta utifrån checksumma i manifestet. Egen klass kanske?
+                    // Varje checksumma kan ha flera filer kopplade till sig.
+                    // string GetChecksum(string fileName)
+                    // string[] GetFileNames(string checksum)
+
+                    // För fetch behöver vi bara nyckel på filnamn
+                    // Returnera både storlek och url?
+
+                    // Om man i en ny version tar bort en fil (tas bort från fetch)
+                    // och sedan laddar upp den igen, kommer den att lagras i båda nya versionen och föregående.
+                    // Vill vi undvika detta måste vi ha ett gemensamt manifest över checksummorna för alla versioner
+                    // som i OCFL.
+                    // Samma sak om man inte importerar filer från förra versionen utan laddar upp dem igen.
+                    // Ha ett gemensamt manifest, eller kanske titta på föregående versions manifest?
+                    // Iterera över alla versioners manifest, blir inte skalbart?
+
                     await UpdateManifestSha256File(datasetVersion, result.Id, sha256.Hash!);
 
                     //result.Id = fileName; ??
@@ -162,8 +198,8 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         var payloadChecksums = await GetManifestSha256Values(datasetVersion, true);
         var tagChecksums = await GetManifestSha256Values(datasetVersion, false);
 
-        static string? GetChecksum(IDictionary<string, string> manifest, string fileName) =>
-            manifest.TryGetValue(fileName, out string? value) ? value : null;
+        static string? GetChecksum(BagItManifest manifest, string fileName) =>
+            manifest.TryGetChecksum(fileName, out byte[] value) ? Convert.ToHexString(value) : null;
 
         await foreach (var file in storageService.ListFiles(datasetVersion))
         {
@@ -231,66 +267,42 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         type.ToString().ToLower() + '/' + fileName;
 
 
-    private async Task<IDictionary<string, string>> GetManifestSha256Values(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
+    private async Task<BagItManifest> GetManifestSha256Values(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
-        var result = new Dictionary<string, string>();
-
         var fileData = await storageService.GetFileData(datasetVersion,
             payloadManifest ? payloadManifestSha256FileName : tagManifestSha256FileName);
 
         if (fileData == null)
         {
-            return result;
+            return new BagItManifest();
         }
 
-        using var reader = new StreamReader(fileData.Stream, Encoding.UTF8);
-        string? line;
-        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
-        {
-            int index = line.IndexOf(' ');
-            string hash = line[..index];
-            string fileName = line[(index + 1)..];
-
-            result[fileName] = hash;
-        }
-
-        return result;
+        return await BagItManifest.Parse(fileData.Stream);
     }
 
     private async Task UpdateManifestSha256File(DatasetVersionIdentifier datasetVersion, string filePath, byte[]? sha256Hash)
     {
-        static string PercentEncodePath(string path)
-        {
-            return path
-                .Replace("%", "%25")
-                .Replace("\n", "%0A")
-                .Replace("\r", "%0D");
-        }
-
         bool payloadManifest = filePath.StartsWith("data/");
-        var values = await GetManifestSha256Values(datasetVersion, payloadManifest);
-        var encodedFilePath = PercentEncodePath(filePath);
+        var manifest = await GetManifestSha256Values(datasetVersion, payloadManifest);
 
-        if (sha256Hash != null)
+        if (sha256Hash == null)
         {
-            values[encodedFilePath] = Convert.ToHexString(sha256Hash).ToLower();
+            manifest.RemoveChecksum(filePath);
         }
         else
         {
-            values.Remove(encodedFilePath);
+            manifest.SetChecksum(filePath, sha256Hash);
         }
-
+       
         string manifestFilePath = payloadManifest ? payloadManifestSha256FileName : tagManifestSha256FileName;
 
-        if (values.Any())
+        if (manifest.IsEmpty())
         {
-            var newContent = Encoding.UTF8.GetBytes(string.Join("\n", values.Select(k => k.Value + " " + k.Key)));
-
-            await storageService.StoreFile(datasetVersion, manifestFilePath, new MemoryStream(newContent));
+            await storageService.DeleteFile(datasetVersion, manifestFilePath);
         }
         else
         {
-            await storageService.DeleteFile(datasetVersion, manifestFilePath);
+            await storageService.StoreFile(datasetVersion, manifestFilePath, new MemoryStream(manifest.Serialize()));
         }
     }
 }
