@@ -97,10 +97,9 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
                     var result = await storageService.StoreFile(datasetVersion, filePath, monitoringStream);
 
-                    filePath = result.Id;
                     byte[] checksum = sha256.Hash!;
 
-                    await AddOrUpdateManifestItem(datasetVersion, new(filePath, checksum));
+                    await AddOrUpdateManifestItem(datasetVersion, new(result.Id, checksum));
 
                     if (TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var previousVersionNumber))
                     {
@@ -140,7 +139,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                     //result.Id = fileName; ??
                     result.ContentSize = bytesRead;
                     //result.EncodingFormat?
-                    result.Sha256 = Convert.ToHexString(sha256.Hash!);
+                    result.Sha256 = Convert.ToHexString(checksum);
                     // result.Url?
 
                     return result;
