@@ -1,5 +1,6 @@
 ﻿namespace DatasetFileUpload.Models.BagIt;
 
-public record BagItManifestItem(
+public record BagItFetchItem(
     string FilePath,
-    byte[] Checksum);
+    long? Length,
+    string Url);

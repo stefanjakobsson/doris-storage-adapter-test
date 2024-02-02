@@ -14,14 +14,6 @@ public class BagItManifest
 
     public static async Task<BagItManifest> Parse(Stream stream)
     {
-        static string DecodePath(string path) =>
-            path
-                .Replace("%25", "%")
-                .Replace("%0A", "\n")
-                .Replace("%0a", "\n")
-                .Replace("%0D", "\r")
-                .Replace("%0d", "\r");
-
         var result = new BagItManifest();
 
         using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -30,13 +22,9 @@ public class BagItManifest
         {
             int index = line.IndexOf(' ');
             string checksum = line[..index];
-            string filePath = DecodePath(line[(index + 1)..]);
+            string filePath = BagitHelpers.DecodeFilePath(line[(index + 1)..]);
 
-            result.AddOrUpdateItem(new()
-            {
-                Checksum = Convert.FromHexString(checksum),
-                FilePath = filePath
-            });
+            result.AddOrUpdateItem(new(filePath, Convert.FromHexString(checksum)));
         }
 
         return result;
@@ -50,7 +38,7 @@ public class BagItManifest
             return true;
         }
 
-        item = new() { Checksum = [], FilePath = "" };
+        item = new("", []);
         return false;
     }
 
@@ -103,15 +91,9 @@ public class BagItManifest
     // Maybe serialize to stream here instead?
     public byte[] Serialize()
     {
-        static string EncodePath(string path)
-        {
-            return path
-                .Replace("%", "%25")
-                .Replace("\n", "%0A")
-                .Replace("\r", "%0D");
-        }
-
-        var values = items.Select(i => Convert.ToHexString(i.Value.Checksum) + " " + EncodePath(i.Value.FilePath));
+        var values = Items.Select(i => 
+            Convert.ToHexString(i.Checksum) + " " + 
+            BagitHelpers.EncodeFilePath(i.FilePath));
 
         return Encoding.UTF8.GetBytes(string.Join("\n", values));
     }

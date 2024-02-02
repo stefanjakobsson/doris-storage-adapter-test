@@ -4,26 +4,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
 
 [ApiController]
 [Authorize]
-public class RoCrateMetadataController : Controller
+public class RoCrateMetadataController(ILogger<RoCrateMetadataController> logger, IStorageService storageService) : Controller
 {
-    private readonly ILogger logger;
-    private readonly IStorageService storageService;
-
-    public RoCrateMetadataController(ILogger<RoCrateMetadataController> logger, IStorageService storageService)
-    {
-        this.logger = logger;
-        this.storageService = storageService;
-    }
+    private readonly ILogger logger = logger;
+    private readonly IStorageService storageService = storageService;
 
     [HttpPost("/metadata/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public async Task CreateOrUpdateRoCrateMetadata(string datasetIdentifier, string versionNumber, JsonDocument metadata)
+    public void CreateOrUpdateRoCrateMetadata(string datasetIdentifier, string versionNumber, JsonDocument metadata)
     {
         logger.LogInformation("Update RO-Crate metadata datasetIdentifier: {datasetIdentifier} versionNumber: {versionNumber})",
             datasetIdentifier, versionNumber);

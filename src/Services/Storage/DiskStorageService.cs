@@ -14,10 +14,10 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 {
     private readonly IConfiguration configuration = configuration;
 
-    public Task<StreamWithLength?> GetFileData(DatasetVersionIdentifier datasetVersion, string fileName)
+    public Task<StreamWithLength?> GetFileData(DatasetVersionIdentifier datasetVersion, string filePath)
     {
         string basePath = GetDatasetVersionPath(datasetVersion);
-        string filePath = GetFilePathOrThrow(fileName, basePath);
+        filePath = GetFilePathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
         {
@@ -28,10 +28,10 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
     }
 
-    public async Task<RoCrateFile> StoreFile(DatasetVersionIdentifier datasetVersion, string fileName, Stream data)
+    public async Task<RoCrateFile> StoreFile(DatasetVersionIdentifier datasetVersion, string filePath, Stream data)
     {
         string basePath = GetDatasetVersionPath(datasetVersion);
-        string filePath = GetFilePathOrThrow(fileName, basePath);
+        filePath = GetFilePathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
         if (!Directory.Exists(directoryPath))
@@ -56,10 +56,10 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         };
     }
 
-    public Task DeleteFile(DatasetVersionIdentifier datasetVersion, string fileName)
+    public Task DeleteFile(DatasetVersionIdentifier datasetVersion, string filePath)
     {
         string basePath = GetDatasetVersionPath(datasetVersion);
-        string filePath = GetFilePathOrThrow(fileName, basePath);
+        filePath = GetFilePathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
         {
@@ -146,16 +146,16 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         Path.GetFullPath(Path.Combine(
             GetBasePath(), datasetVersion.DatasetIdentifier, datasetVersion.DatasetIdentifier + '-' + datasetVersion.VersionNumber));
 
-    private static string GetFilePathOrThrow(string fileName, string basePath)
+    private static string GetFilePathOrThrow(string filePath, string basePath)
     {
-        string filePath = Path.GetFullPath(fileName, basePath);
+        string result = Path.GetFullPath(filePath, basePath);
 
-        if (!filePath.StartsWith(basePath))
+        if (!result.StartsWith(basePath))
         {
-            throw new IllegalFileNameException(fileName);
+            throw new IllegalFileNameException(filePath);
         }
 
-        return filePath;
+        return result;
     }
 
     private static string NormalizePath(string path)

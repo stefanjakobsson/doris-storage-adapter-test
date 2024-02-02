@@ -25,6 +25,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 {
     private const string payloadManifestSha256FileName = "manifest-sha256.txt";
     private const string tagManifestSha256FileName = "tagmanifest-sha256.txt";
+    private const string fetchFileName = "fetch.txt";
 
     private readonly ILogger logger = logger;
     private readonly IStorageService storageService = storageService;
@@ -70,17 +71,17 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                 contentDisposition.DispositionType.Equals("form-data") &&
                 !string.IsNullOrEmpty(contentDisposition.FileName.Value))
             {
-                string fileName = contentDisposition.FileName.Value;
+                string filePath = contentDisposition.FileName.Value;
 
-                if (!CheckFileName(fileName))
+                if (!CheckFileName(filePath))
                 {
                     return IllegalFileNameResult();
                 }
 
-                fileName = GetFileName(fileName, type);
+                filePath = GetFilePath(filePath, type);
 
-                logger.LogInformation("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {fileName}",
-                    datasetIdentifier, versionNumber, fileName);
+                logger.LogInformation("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, FileName: {filePath}",
+                    datasetIdentifier, versionNumber, filePath);
 
                 try
                 {
@@ -94,48 +95,47 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                         bytesRead += e.Count;
                     };
 
-                    var result = await storageService.StoreFile(datasetVersion, fileName, monitoringStream);
+                    var result = await storageService.StoreFile(datasetVersion, filePath, monitoringStream);
 
-                    // Add file:
-                    // Check if result.Sha256 is in manifest
-                    //      Yes. Check if path is identical
-                    //          Yes. Check if path is in fetch.txt.
-                    //              Yes. Delete file.
-                    //              No. Do nothing.
-                    //          No. Add to fetch.txt and delete file.
-                    //      No. Update manifest and remove from fetch (if present).
+                    filePath = result.Id;
+                    byte[] checksum = sha256.Hash!;
 
-                    // Delete file:
-                    // Delete from disk.
-                    // Delete from manifest.
-                    // Delete from fetch.txt.
+                    await AddOrUpdateManifestItem(datasetVersion, new(filePath, checksum));
 
-                    // New version:
-                    // Copy manifest from previous version
-                    // Copy fetch.txt from previous version
-                    // Complete fetch.txt with references to files in manifest but not in fetch
-
-                    // Behöver struktur för att hämta utifrån checksumma i manifestet. Egen klass kanske?
-                    // Varje checksumma kan ha flera filer kopplade till sig.
-                    // string GetChecksum(string fileName)
-                    // string[] GetFileNames(string checksum)
-
-                    // För fetch behöver vi bara nyckel på filnamn
-                    // Returnera både storlek och url?
-
-                    // Om man i en ny version tar bort en fil (tas bort från fetch)
-                    // och sedan laddar upp den igen, kommer den att lagras i båda nya versionen och föregående.
-                    // Vill vi undvika detta måste vi ha ett gemensamt manifest över checksummorna för alla versioner
-                    // som i OCFL.
-                    // Samma sak om man inte importerar filer från förra versionen utan laddar upp dem igen.
-                    // Ha ett gemensamt manifest, eller kanske titta på föregående versions manifest?
-                    // Iterera över alla versioners manifest, blir inte skalbart?
-
-                    await AddOrUpdateManifestItem(datasetVersion, new()
+                    if (TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var previousVersionNumber))
                     {
-                        FilePath = result.Id, 
-                        Checksum = sha256.Hash!
-                    });
+                        var previousDatasetVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNumber);
+                        var previousVersionManifest = await LoadManifest(previousDatasetVersion, type == UploadType.Data);
+                        var itemsWithEqualChecksum = previousVersionManifest.GetItemsByChecksum(checksum);
+
+                        if (itemsWithEqualChecksum.Any())
+                        {
+                            var previousVersionFetch = await LoadFetch(previousDatasetVersion);
+                            var manifestItem = itemsWithEqualChecksum.First();
+
+                            if (previousVersionFetch.TryGetItem(manifestItem.FilePath, out var fetchItem))
+                            {
+                                await AddOrUpdateFetchItem(datasetVersion,
+                                    new(result.Id, bytesRead, fetchItem.Url));
+                            }
+                            else
+                            {
+                                // Fix so that folder structure is constructed from here (not in IStorageService),
+                                // or add method to IStorageService to retreive folder for previous version
+                                await AddOrUpdateFetchItem(datasetVersion,
+                                    // Build relative file path
+                                    new(result.Id, bytesRead,
+                                        "file://../" + Uri.EscapeDataString(previousDatasetVersion.DatasetIdentifier + "-" +
+                                        previousDatasetVersion.VersionNumber) + '/' + Uri.EscapeDataString(manifestItem.FilePath)));
+                            }
+
+                            await storageService.DeleteFile(datasetVersion, result.Id);
+                        }
+                        else
+                        {
+                            await RemoveItemFromFetch(datasetVersion, result.Id);
+                        }
+                    }
 
                     //result.Id = fileName; ??
                     result.ContentSize = bytesRead;
@@ -160,7 +160,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string fileName)
+    public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -169,20 +169,21 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
             return Forbid();
         }
 
-        if (!CheckFileName(fileName))
+        if (!CheckFileName(filePath))
         {
             return IllegalFileNameResult();
         }
 
-        fileName = GetFileName(fileName, type);
+        filePath = GetFilePath(filePath, type);
 
         logger.LogInformation("Delete datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, fileName: {fileName}",
-            datasetIdentifier, versionNumber, fileName);
+            datasetIdentifier, versionNumber, filePath);
 
         try
         {
-            await storageService.DeleteFile(datasetVersion, fileName);
-            await RemoveItemFromManifest(datasetVersion, fileName);
+            await storageService.DeleteFile(datasetVersion, filePath);
+            await RemoveItemFromManifest(datasetVersion, filePath);
+            await RemoveItemFromFetch(datasetVersion, filePath);
         }
         catch (IllegalFileNameException)
         {
@@ -220,18 +221,18 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public async Task<IActionResult> GetData(string datasetIdentifier, string versionNumber, UploadType type, string fileName)
+    public async Task<IActionResult> GetData(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        if (!CheckFileName(fileName))
+        if (!CheckFileName(filePath))
         {
             return IllegalFileNameResult();
         }
 
-        fileName = GetFileName(fileName, type);
+        filePath = GetFilePath(filePath, type);
 
-        var fileData = await storageService.GetFileData(datasetVersion, fileName);
+        var fileData = await storageService.GetFileData(datasetVersion, filePath);
 
         if (fileData == null)
         {
@@ -240,7 +241,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         Response.Headers.ContentLength = fileData.Length;
 
-        return File(fileData.Stream, "application/octet-stream", fileName);
+        return File(fileData.Stream, "application/octet-stream", filePath);
     }
 
     private bool CheckClaims(DatasetVersionIdentifier datasetVersion) =>
@@ -266,7 +267,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     private ObjectResult IllegalFileNameResult() =>
         Problem("Illegal file name.", statusCode: 400);
 
-    private static string GetFileName(string fileName, UploadType type) =>
+    private static string GetFilePath(string fileName, UploadType type) =>
         type.ToString().ToLower() + '/' + fileName;
 
 
@@ -276,10 +277,22 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         if (fileData == null)
         {
-            return new BagItManifest();
+            return new();
         }
 
         return await BagItManifest.Parse(fileData.Stream);
+    }
+
+    private async Task<BagItFetch> LoadFetch(DatasetVersionIdentifier datasetVersion)
+    {
+        var fileData = await storageService.GetFileData(datasetVersion, fetchFileName);
+
+        if (fileData == null)
+        {
+            return new();
+        }
+
+        return await BagItFetch.Parse(fileData.Stream);
     }
 
     private async Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item)
@@ -287,8 +300,16 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         bool payload = item.FilePath.StartsWith("data/");
         var manifest = await LoadManifest(datasetVersion, payload);
         manifest.AddOrUpdateItem(item);
-       
+
         await StoreManifest(datasetVersion, payload, manifest);
+    }
+
+    private async Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item)
+    {
+        var fetch = await LoadFetch(datasetVersion);
+        fetch.AddOrUpdateItem(item);
+
+        await StoreFetch(datasetVersion, fetch);
     }
 
     private async Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath)
@@ -309,8 +330,43 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         }
     }
 
+    private async Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath)
+    {
+        var fetch = await LoadFetch(datasetVersion);
+
+        if (fetch.RemoveItem(filePath))
+        {
+            if (fetch.Items.Any())
+            {
+                await StoreFetch(datasetVersion, fetch);
+            }
+            else
+            {
+                await storageService.DeleteFile(datasetVersion, fetchFileName);
+            }
+        }
+    }
+
     private static string GetManifestFilePath(bool payload) => payload ? payloadManifestSha256FileName : tagManifestSha256FileName;
 
     private Task<RoCrateFile> StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest) =>
          storageService.StoreFile(datasetVersion, GetManifestFilePath(payload), new MemoryStream(manifest.Serialize()));
+
+    private Task StoreFetch(DatasetVersionIdentifier datasetVersion, BagItFetch fetch) =>
+        storageService.StoreFile(datasetVersion, fetchFileName, new MemoryStream(fetch.Serialize()));
+
+    private static bool TryGetPreviousVersionNumber(string versionNumber, out string previousVersionNumber)
+    {
+        var values = versionNumber.Split('.');
+        int versionMajor = int.Parse(values[0]);
+
+        if (versionMajor > 1)
+        {
+            previousVersionNumber = (versionMajor - 1).ToString();
+            return true;
+        }
+
+        previousVersionNumber = "";
+        return false;
+    }
 }

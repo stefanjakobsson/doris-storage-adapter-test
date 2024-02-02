@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
 
@@ -15,7 +14,7 @@ public class AuthController(ILogger<AuthController> logger, IConfiguration confi
 {
     private readonly ILogger logger = logger;
     private readonly IConfiguration configuration = configuration;
-    private TokenService tokenService = new TokenService(configuration);
+    private readonly TokenService tokenService = new(configuration);
 
     [HttpPost("token/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
