@@ -12,6 +12,7 @@ using Microsoft.Net.Http.Headers;
 using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
@@ -30,7 +31,69 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     private readonly ILogger logger = logger;
     private readonly IStorageService storageService = storageService;
 
-    [HttpPost("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [HttpPut("file/{datasetIdentifier}/{versionNumber}")]
+    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<IActionResult> SetupVersion(string datasetIdentifier, string versionNumber)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        // Must check to see if version already exists in storage, so that we do not overwrite?
+
+        async Task CopyManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion, bool payload)
+        {
+            var fileData = await storageService.GetFileData(fromVersion, GetManifestFilePath(payload));
+            if (fileData != null)
+            {
+                await storageService.StoreFile(toVersion, GetManifestFilePath(payload), fileData.Stream);
+            }
+        }
+
+        if (TryGetPreviousVersionNumber(versionNumber, out string previousVersionNr))
+        {
+            var previousVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNr);
+            //var payloadManifest = await LoadManifest(previousVersion, true);
+            //var tagManifest = await LoadManifest(previousVersion, false);
+            var fetch = await LoadFetch(previousVersion);
+
+            await CopyManifest(previousVersion, datasetVersion, true);
+            await CopyManifest(previousVersion, datasetVersion, false);
+
+            string previousVersionUrl = "../" + Uri.EscapeDataString(previousVersion.DatasetIdentifier + "-" +
+                                        previousVersion.VersionNumber) + '/';
+
+            // Maybe store all URL:s within the same version as ../ instead?
+            foreach (var item in fetch.Items.Where(i => !i.Url.StartsWith("../")))
+            {
+                fetch.AddOrUpdateItem(item with { Url = previousVersionUrl + item.Url });
+            }
+
+            await foreach (var file in storageService.ListFiles(previousVersion))
+            {
+                if (!fetch.TryGetItem(file.Id, out var _))
+                {
+                    fetch.AddOrUpdateItem(new(file.Id, file.ContentSize, previousVersionUrl + Uri.EscapeDataString(file.Id)));
+                }
+            }
+
+            /*foreach (var item in payloadManifest.Items.Where(i => !fetch.TryGetItem(i.FilePath, out var _)))
+            {
+                fetch.AddOrUpdateItem(new(item.FilePath, null, "../" + Uri.EscapeDataString(previousVersion.DatasetIdentifier + "-" +
+                                        previousVersion.VersionNumber) + '/' + Uri.EscapeDataString(item.FilePath)));
+            }
+
+            foreach (var item in tagManifest.Items.Where(i => !fetch.TryGetItem(i.FilePath, out var _)))
+            {
+                fetch.AddOrUpdateItem(new(item.FilePath, null, "../" + Uri.EscapeDataString(previousVersion.DatasetIdentifier + "-" +
+                                        previousVersion.VersionNumber) + '/' + Uri.EscapeDataString(item.FilePath)));
+            }*/
+
+            await StoreFetch(datasetVersion, fetch);
+        }
+
+        return Ok();
+    }
+
+    [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     // Disable form value model binding to ensure that files are not buffered
     [DisableFormValueModelBinding]
@@ -85,6 +148,44 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
                 try
                 {
+                    static bool TryDeduplicate(
+                        BagItManifestItem item,
+                        DatasetVersionIdentifier currentVersion,
+                        DatasetVersionIdentifier compareToVersion,
+                        BagItManifest manifest,
+                        BagItFetch fetch,
+                        out string url)
+                    {
+                        var itemsWithEqualChecksum = manifest.GetItemsByChecksum(item.Checksum);
+
+                        if (itemsWithEqualChecksum.Any())
+                        {
+                            // If we find an item with equal checksum in fetch.txt, use that URL
+                            foreach (var candidate in itemsWithEqualChecksum)
+                            {
+                                if (fetch.TryGetItem(candidate.FilePath, out var fetchItem))
+                                {
+                                    url = fetchItem.Url;
+                                    return true;
+                                }
+                            }
+
+                            string relativePath = "";
+                            if (currentVersion != compareToVersion)
+                            {
+                                relativePath = "../" + Uri.EscapeDataString(compareToVersion.DatasetIdentifier + "-" +
+                                        compareToVersion.VersionNumber) + '/';
+                            }
+
+                            // Nothing found in fetch.txt, just take first item's file path
+                            url = relativePath + Uri.EscapeDataString(itemsWithEqualChecksum.First().FilePath);
+                            return true;
+                        }
+
+                        url = "";
+                        return false;
+                    }
+
                     using var sha256 = SHA256.Create();
                     using var hashStream = new CryptoStream(section.Body, sha256, CryptoStreamMode.Read);
 
@@ -99,42 +200,44 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
                     byte[] checksum = sha256.Hash!;
 
-                    await AddOrUpdateManifestItem(datasetVersion, new(result.Id, checksum));
+                    var bagItItem = new BagItManifestItem(result.Id, sha256.Hash!);
+                    var manifest = await LoadManifest(datasetVersion, type == UploadType.Data);
+                    var fetch = await LoadFetch(datasetVersion);
 
-                    if (TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var previousVersionNumber))
+
+                    if (!TryDeduplicate(bagItItem, datasetVersion, datasetVersion, manifest, fetch, out string url) &&
+                        TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
                     {
-                        var previousDatasetVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNumber);
-                        var previousVersionManifest = await LoadManifest(previousDatasetVersion, type == UploadType.Data);
-                        var itemsWithEqualChecksum = previousVersionManifest.GetItemsByChecksum(checksum);
+                        var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
+                        var prevManifest = await LoadManifest(prevVersion, type == UploadType.Data);
+                        var prevFetch = await LoadFetch(prevVersion);
 
-                        if (itemsWithEqualChecksum.Any())
+                        TryDeduplicate(bagItItem, datasetVersion, prevVersion, prevManifest, prevFetch, out url);
+                    }
+
+                    if (url != "")
+                    {
+                        fetch.AddOrUpdateItem(new(bagItItem.FilePath, bytesRead, url));
+                        await StoreFetch(datasetVersion, fetch);
+                        await storageService.DeleteFile(datasetVersion, result.Id);
+                    }
+                    else
+                    {
+                        if (fetch.RemoveItem(bagItItem.FilePath))
                         {
-                            var previousVersionFetch = await LoadFetch(previousDatasetVersion);
-                            var manifestItem = itemsWithEqualChecksum.First();
-
-                            if (previousVersionFetch.TryGetItem(manifestItem.FilePath, out var fetchItem))
+                            if (fetch.Items.Any())
                             {
-                                await AddOrUpdateFetchItem(datasetVersion,
-                                    new(result.Id, bytesRead, fetchItem.Url));
+                                await StoreFetch(datasetVersion, fetch);
                             }
                             else
                             {
-                                // Fix so that folder structure is constructed from here (not in IStorageService),
-                                // or add method to IStorageService to retreive folder for previous version
-                                await AddOrUpdateFetchItem(datasetVersion,
-                                    // Build relative file path
-                                    new(result.Id, bytesRead,
-                                        "file://../" + Uri.EscapeDataString(previousDatasetVersion.DatasetIdentifier + "-" +
-                                        previousDatasetVersion.VersionNumber) + '/' + Uri.EscapeDataString(manifestItem.FilePath)));
+                                await storageService.DeleteFile(datasetVersion, fetchFileName);
                             }
-
-                            await storageService.DeleteFile(datasetVersion, result.Id);
-                        }
-                        else
-                        {
-                            await RemoveItemFromFetch(datasetVersion, result.Id);
                         }
                     }
+
+                    manifest.AddOrUpdateItem(bagItItem);
+                    await StoreManifest(datasetVersion, type == UploadType.Data, manifest);
 
                     //result.Id = fileName; ??
                     result.ContentSize = bytesRead;
