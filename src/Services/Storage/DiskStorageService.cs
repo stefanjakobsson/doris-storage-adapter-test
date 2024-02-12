@@ -152,7 +152,7 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 
         if (!result.StartsWith(basePath))
         {
-            throw new IllegalFileNameException(filePath);
+            throw new IllegalFilePathException(filePath);
         }
 
         return result;
