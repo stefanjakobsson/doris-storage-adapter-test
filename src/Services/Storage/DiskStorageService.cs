@@ -14,10 +14,9 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 {
     private readonly IConfiguration configuration = configuration;
 
-    public Task<StreamWithLength?> GetFileData(DatasetVersionIdentifier datasetVersion, string filePath)
+    public Task<StreamWithLength?> GetFileData(string filePath)
     {
-        string basePath = GetDatasetVersionPath(datasetVersion);
-        filePath = GetFilePathOrThrow(filePath, basePath);
+        filePath = GetPathOrThrow(filePath, GetBasePath());
 
         if (!File.Exists(filePath))
         {
@@ -28,10 +27,10 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
     }
 
-    public async Task<RoCrateFile> StoreFile(DatasetVersionIdentifier datasetVersion, string filePath, Stream data)
+    public async Task<RoCrateFile> StoreFile(string filePath, Stream data)
     {
-        string basePath = GetDatasetVersionPath(datasetVersion);
-        filePath = GetFilePathOrThrow(filePath, basePath);
+        string basePath = GetBasePath();
+        filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
         if (!Directory.Exists(directoryPath))
@@ -46,7 +45,7 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 
         return new RoCrateFile
         {
-            Id = NormalizePath(Path.GetRelativePath(basePath, filePath)), 
+            Id = NormalizePath(Path.GetRelativePath(basePath, filePath)),
             ContentSize = fileInfo.Length,
             DateCreated = fileInfo.CreationTime.ToUniversalTime(),
             DateModified = fileInfo.LastWriteTime.ToUniversalTime(),
@@ -56,10 +55,10 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         };
     }
 
-    public Task DeleteFile(DatasetVersionIdentifier datasetVersion, string filePath)
+    public Task DeleteFile(string filePath)
     {
-        string basePath = GetDatasetVersionPath(datasetVersion);
-        filePath = GetFilePathOrThrow(filePath, basePath);
+        string basePath = GetBasePath();
+        filePath = GetPathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
         {
@@ -70,7 +69,7 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 
         // Delete any empty subdirectories that result from deleting the file
         DirectoryInfo? directory = new(Path.GetDirectoryName(filePath)!);
-        while 
+        while
         (
             directory != null &&
             directory.FullName != basePath &&
@@ -84,7 +83,7 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
+    public async IAsyncEnumerable<RoCrateFile> ListFiles(string path)
     {
         // This is a hack to avoid warning CS1998 (async method without await)
         await Task.CompletedTask;
@@ -112,47 +111,36 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
             }
         }
 
-        string basePath = GetDatasetVersionPath(datasetVersion);
+        string basePath = GetBasePath();
+        path = GetPathOrThrow(path, basePath);
 
-        IEnumerable<FileInfo> EnumerateFilesForType(UploadType type) =>
-            EnumerateFiles(Path.Combine(basePath, GetPathForType(type)))
-            .OrderBy(f => f.FullName, StringComparer.InvariantCulture);
-
-        foreach (var type in new[] { UploadType.Data, UploadType.Documentation })
+        foreach (var file in EnumerateFiles(path)
+            .OrderBy(f => f.FullName, StringComparer.InvariantCulture))
         {
-            foreach (var file in EnumerateFilesForType(type))
-            {
-                var relativePath = Path.GetRelativePath(basePath, file.FullName);
+            var relativePath = Path.GetRelativePath(basePath, file.FullName);
 
-                yield return new()
-                {
-                    Id = NormalizePath(relativePath),
-                    ContentSize = file.Length,
-                    DateCreated = file.CreationTime.ToUniversalTime(),
-                    DateModified = file.LastWriteTime.ToUniversalTime(),
-                    EncodingFormat = null,
-                    Sha256 = null,
-                    Url = null
-                };
-            }
+            yield return new()
+            {
+                Id = NormalizePath(relativePath),
+                ContentSize = file.Length,
+                DateCreated = file.CreationTime.ToUniversalTime(),
+                DateModified = file.LastWriteTime.ToUniversalTime(),
+                EncodingFormat = null,
+                Sha256 = null,
+                Url = null
+            };
         }
     }
 
-    private static string GetPathForType(UploadType type) => type.ToString().ToLower();
-
     private string GetBasePath() => Path.GetFullPath(configuration["Storage:DiskStorageService:BasePath"]!);
 
-    private string GetDatasetVersionPath(DatasetVersionIdentifier datasetVersion) =>
-        Path.GetFullPath(Path.Combine(
-            GetBasePath(), datasetVersion.DatasetIdentifier, datasetVersion.DatasetIdentifier + '-' + datasetVersion.VersionNumber));
-
-    private static string GetFilePathOrThrow(string filePath, string basePath)
+    private static string GetPathOrThrow(string path, string basePath)
     {
-        string result = Path.GetFullPath(filePath, basePath);
+        string result = Path.GetFullPath(path, basePath);
 
         if (!result.StartsWith(basePath))
         {
-            throw new IllegalFilePathException(filePath);
+            throw new IllegalPathException(path);
         }
 
         return result;

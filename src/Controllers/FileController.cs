@@ -37,7 +37,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     [DisableFormValueModelBinding]
     // Disable request size limit to allow streaming large files
     [DisableRequestSizeLimit]
-    public async Task<ActionResult<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, UploadType type)
+    public async Task<ActionResult<RoCrateFile>> Upload(string datasetIdentifier, string versionNumber, FileType type)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -77,7 +77,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                 {                  
                     return await new Helper(storageService).Upload(datasetVersion, type, filePath, section.Body);
                 }
-                catch (IllegalFilePathException)
+                catch (IllegalPathException)
                 {
                     return IllegalFilePathResult();
                 }
@@ -92,7 +92,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
+    public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, FileType type, string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -108,7 +108,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         {
             await new Helper(storageService).Delete(datasetVersion, type, filePath);
         }
-        catch (IllegalFilePathException)
+        catch (IllegalPathException)
         {
             return IllegalFilePathResult();
         }
@@ -116,23 +116,8 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         return Ok();
     }
 
-    [HttpGet("/file/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
-    {
-        logger.LogDebug("ListFiles datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}",
-            datasetIdentifier, versionNumber);
-
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
-
-        await foreach (var file in new Helper(storageService).ListFiles(datasetVersion))
-        {
-            yield return file;
-        }
-    }
-
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public async Task<IActionResult> GetData(string datasetIdentifier, string versionNumber, UploadType type, string filePath)
+    public async Task<IActionResult> GetData(string datasetIdentifier, string versionNumber, FileType type, string filePath)
     {
         logger.LogDebug("GetData datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, type: {type}, filePath: {filePath}",
             datasetIdentifier, versionNumber, type, filePath);
@@ -152,9 +137,24 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
             return File(fileData.Stream, "application/octet-stream", filePath);
         }
-        catch (IllegalFilePathException)
+        catch (IllegalPathException)
         {
             return IllegalFilePathResult();
+        }
+    }
+
+    [HttpGet("/file/{datasetIdentifier}/{versionNumber}")]
+    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
+    {
+        logger.LogDebug("ListFiles datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}",
+            datasetIdentifier, versionNumber);
+
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        await foreach (var file in new Helper(storageService).ListFiles(datasetVersion))
+        {
+            yield return file;
         }
     }
 
