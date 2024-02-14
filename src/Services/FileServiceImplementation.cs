@@ -33,32 +33,34 @@ public class FileServiceImplementation(IStorageService storageService)
             }
         }
 
-        if (TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out string previousVersionNr))
+        if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out string previousVersionNr))
         {
-            var previousVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNr);
-            var fetch = await LoadFetch(previousVersion);
-            var newFetch = new BagItFetch();
-
-            await CopyManifest(previousVersion, datasetVersion, true);
-            await CopyManifest(previousVersion, datasetVersion, false);
-
-            string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
-
-            foreach (var item in fetch.Items.Where(i => !i.Url.StartsWith("../")))
-            {
-                newFetch.AddOrUpdateItem(item with { Url = previousVersionUrl + item.Url });
-            }
-
-            await foreach (var file in ListFilesForDatasetVersion(previousVersion))
-            {
-                if (!fetch.Contains(file.Id))
-                {
-                    newFetch.AddOrUpdateItem(new(file.Id, file.ContentSize, previousVersionUrl + UrlEncodePath(file.Id)));
-                }
-            }
-
-            await StoreFetch(datasetVersion, newFetch);
+            return;
         }
+
+        var previousVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNr);
+        var fetch = await LoadFetch(previousVersion);
+        var newFetch = new BagItFetch();
+
+        await CopyManifest(previousVersion, datasetVersion, true);
+        await CopyManifest(previousVersion, datasetVersion, false);
+
+        string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
+
+        foreach (var item in fetch.Items)
+        {
+            newFetch.AddOrUpdateItem(item);
+        }
+
+        await foreach (var file in ListFilesForDatasetVersion(previousVersion))
+        {
+            if (!fetch.Contains(file.Id))
+            {
+                newFetch.AddOrUpdateItem(new(file.Id, file.ContentSize, previousVersionUrl + UrlEncodePath(file.Id)));
+            }
+        }
+
+        await StoreFetch(datasetVersion, newFetch);
     }
 
     public async Task<RoCrateFile> Upload(
@@ -83,31 +85,40 @@ public class FileServiceImplementation(IStorageService storageService)
                 return false;
             }
 
-            string relativePath = "";
-            if (currentVersion != compareToVersion)
-            {
-                relativePath = "../" + UrlEncodePath(GetVersionPath(compareToVersion)) + '/';
-            }
-
             // If we find an item with equal checksum in fetch.txt, use that URL
             foreach (var candidate in itemsWithEqualChecksum)
             {
                 if (fetch.TryGetItem(candidate.FilePath, out var fetchItem))
                 {
                     url = fetchItem.Url;
-
-                    if (!url.StartsWith("../"))
-                    {
-                        url = relativePath + url;
-                    }
-
                     return true;
                 }
             }
 
             // Nothing found in fetch.txt, simply take first item's file path
-            url = relativePath + UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
+            url = "../" + 
+                UrlEncodePath(GetVersionPath(compareToVersion)) + '/' + 
+                UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
             return true;
+        }
+
+        async Task<string?> Deduplicate(BagItManifestItem manifestItem, BagItFetch fetch)
+        {
+            if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
+            {
+                return null;
+            }
+
+            var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
+            var prevManifest = await LoadManifest(prevVersion, type == FileType.Data);
+            var prevFetch = await LoadFetch(prevVersion);
+
+            if (TryDeduplicate(manifestItem, datasetVersion, prevVersion, prevManifest, prevFetch, out string url))
+            {
+                return url;
+            }
+
+            return null;
         }
 
         filePath = GetFilePathOrThrow(type, filePath);
@@ -127,40 +138,30 @@ public class FileServiceImplementation(IStorageService storageService)
 
         byte[] checksum = sha256.Hash!;
 
-        var bagItItem = new BagItManifestItem(filePath, sha256.Hash!);
-        var manifest = await LoadManifest(datasetVersion, type == FileType.Data);
+        var manifestItem = new BagItManifestItem(filePath, sha256.Hash!);
         var fetch = await LoadFetch(datasetVersion);
 
-        // Is deduplicating with the current version overkill?
-
-        // First try deduplicating within current version, if that fails, try with previous version 
-        if (!TryDeduplicate(bagItItem, datasetVersion, datasetVersion, manifest, fetch, out string url) &&
-            TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
-        {
-            var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
-            var prevManifest = await LoadManifest(prevVersion, type == FileType.Data);
-            var prevFetch = await LoadFetch(prevVersion);
-
-            TryDeduplicate(bagItItem, datasetVersion, prevVersion, prevManifest, prevFetch, out url);
-        }
-
-        if (url != "")
+        string? url = await Deduplicate(manifestItem, fetch);
+        if (url != null)
         {
             // Deduplication was successful, store in fetch and delete uploaded file
-            fetch.AddOrUpdateItem(new(bagItItem.FilePath, bytesRead, url));
+            fetch.AddOrUpdateItem(new(manifestItem.FilePath, bytesRead, url));
             await StoreFetch(datasetVersion, fetch);
+
             await storageService.DeleteFile(fullFilePath);
         }
         else
         {
             // File is not a duplicate, remove from fetch if present there
-            if (fetch.RemoveItem(bagItItem.FilePath))
+            if (fetch.RemoveItem(manifestItem.FilePath))
             {
                 await StoreFetch(datasetVersion, fetch);
             }
         }
 
-        manifest.AddOrUpdateItem(bagItItem);
+        // Update manifest
+        var manifest = await LoadManifest(datasetVersion, type == FileType.Data);
+        manifest.AddOrUpdateItem(manifestItem);
         await StoreManifest(datasetVersion, type == FileType.Data, manifest);
 
         //result.Id = fileName; ??
@@ -195,11 +196,6 @@ public class FileServiceImplementation(IStorageService storageService)
         var fetch = await LoadFetch(datasetVersion);
 
         if (fetch.TryGetItem(filePath, out var fetchItem))
-        {
-            filePath = DecodeUrlEncodedPath(fetchItem.Url);
-        }
-
-        if (filePath.StartsWith("../"))
         {
             filePath = GetDatasetPath(datasetVersion) + filePath[2..];
         }
