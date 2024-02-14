@@ -52,10 +52,15 @@ public class BagItManifest
         return [];
     }
 
-    public void AddOrUpdateItem(BagItManifestItem item)
+    public bool AddOrUpdateItem(BagItManifestItem item)
     {
         if (TryGetItem(item.FilePath, out var existingItem))
         {
+            if (item == existingItem)
+            {
+                return false;
+            }
+
             checksumToItems[existingItem.Checksum].Remove(existingItem);
         }
 
@@ -69,6 +74,8 @@ public class BagItManifest
         {
             checksumToItems[item.Checksum] = [item];
         }
+
+        return true;
     }
 
     public bool RemoveItem(string filePath)

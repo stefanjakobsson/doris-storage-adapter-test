@@ -69,38 +69,6 @@ public class FileServiceImplementation(IStorageService storageService)
         string filePath,
         Stream data)
     {
-        static bool TryDeduplicate(
-            byte[] checksum,
-            DatasetVersionIdentifier version,
-            BagItManifest manifest,
-            BagItFetch fetch,
-            out string url)
-        {
-            var itemsWithEqualChecksum = manifest.GetItemsByChecksum(checksum);
-
-            if (!itemsWithEqualChecksum.Any())
-            {
-                url = "";
-                return false;
-            }
-
-            // If we find an item with equal checksum in fetch.txt, use that URL
-            foreach (var candidate in itemsWithEqualChecksum)
-            {
-                if (fetch.TryGetItem(candidate.FilePath, out var fetchItem))
-                {
-                    url = fetchItem.Url;
-                    return true;
-                }
-            }
-
-            // Nothing found in fetch.txt, simply take first item's file path
-            url = "../" + 
-                UrlEncodePath(GetVersionPath(version)) + '/' + 
-                UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
-            return true;
-        }
-
         async Task<string?> Deduplicate(byte[] checksum)
         {
             if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
@@ -110,14 +78,28 @@ public class FileServiceImplementation(IStorageService storageService)
 
             var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
             var prevManifest = await LoadManifest(prevVersion, type == FileType.Data);
-            var prevFetch = await LoadFetch(prevVersion);
+            var itemsWithEqualChecksum = prevManifest.GetItemsByChecksum(checksum);
 
-            if (TryDeduplicate(checksum, prevVersion, prevManifest, prevFetch, out string url))
+            if (!itemsWithEqualChecksum.Any())
             {
-                return url;
+                return null;
             }
 
-            return null;
+            var prevFetch = await LoadFetch(prevVersion);
+
+            // If we find an item with equal checksum in fetch.txt, use that URL
+            foreach (var candidate in itemsWithEqualChecksum)
+            {
+                if (prevFetch.TryGetItem(candidate.FilePath, out var fetchItem))
+                {
+                    return fetchItem.Url;
+                }
+            }
+
+            // Nothing found in fetch.txt, simply take first item's file path
+            return "../" +
+                UrlEncodePath(GetVersionPath(prevVersion)) + '/' +
+                UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
         }
 
         filePath = GetFilePathOrThrow(type, filePath);
@@ -294,17 +276,21 @@ public class FileServiceImplementation(IStorageService storageService)
     {
         bool payload = item.FilePath.StartsWith("data/");
         var manifest = await LoadManifest(datasetVersion, payload);
-        manifest.AddOrUpdateItem(item);
 
-        await StoreManifest(datasetVersion, payload, manifest);
+        if (manifest.AddOrUpdateItem(item))
+        {
+            await StoreManifest(datasetVersion, payload, manifest);
+        }
     }
 
     private async Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item)
     {
         var fetch = await LoadFetch(datasetVersion);
-        fetch.AddOrUpdateItem(item);
 
-        await StoreFetch(datasetVersion, fetch);
+        if (fetch.AddOrUpdateItem(item))
+        {
+            await StoreFetch(datasetVersion, fetch);
+        }
     }
 
     private async Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath)

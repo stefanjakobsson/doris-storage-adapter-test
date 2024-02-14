@@ -45,7 +45,18 @@ public class BagItFetch
         return false;
     }
 
-    public void AddOrUpdateItem(BagItFetchItem item) => items[item.FilePath] = item;
+    public bool AddOrUpdateItem(BagItFetchItem item)
+    {
+        if (TryGetItem(item.FilePath, out var existingItem) &&
+            item == existingItem)
+        {
+            return false;
+        }
+
+        items[item.FilePath] = item;
+
+        return true;
+    }
 
     public bool RemoveItem(string filePath) => items.Remove(filePath);
 
