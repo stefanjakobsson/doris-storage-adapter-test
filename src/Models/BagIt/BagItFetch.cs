@@ -31,6 +31,8 @@ public class BagItFetch
         return result;
     }
 
+    public bool Contains(string filePath) => items.ContainsKey(filePath);
+
     public bool TryGetItem(string filePath, out BagItFetchItem item)
     {
         if (items.TryGetValue(filePath, out var value))

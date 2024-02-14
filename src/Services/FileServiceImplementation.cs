@@ -9,9 +9,9 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Controllers;
+namespace DatasetFileUpload.Services;
 
-public class Helper(IStorageService storageService)
+public class FileServiceImplementation(IStorageService storageService)
 {
     private readonly IStorageService storageService = storageService;
 
@@ -37,26 +37,27 @@ public class Helper(IStorageService storageService)
         {
             var previousVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNr);
             var fetch = await LoadFetch(previousVersion);
+            var newFetch = new BagItFetch();
 
             await CopyManifest(previousVersion, datasetVersion, true);
             await CopyManifest(previousVersion, datasetVersion, false);
 
-            string previousVersionUrl = "../" + Uri.EscapeDataString(GetVersionPath(previousVersion)) + '/';
+            string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
 
             foreach (var item in fetch.Items.Where(i => !i.Url.StartsWith("../")))
             {
-                fetch.AddOrUpdateItem(item with { Url = previousVersionUrl + item.Url });
+                newFetch.AddOrUpdateItem(item with { Url = previousVersionUrl + item.Url });
             }
 
-            await foreach (var file in storageService.ListFiles(GetDatasetVersionPath(previousVersion)))
+            await foreach (var file in ListFilesForDatasetVersion(previousVersion))
             {
-                if (!fetch.TryGetItem(file.Id, out var _))
+                if (!fetch.Contains(file.Id))
                 {
-                    fetch.AddOrUpdateItem(new(file.Id, file.ContentSize, previousVersionUrl + Uri.EscapeDataString(file.Id)));
+                    newFetch.AddOrUpdateItem(new(file.Id, file.ContentSize, previousVersionUrl + UrlEncodePath(file.Id)));
                 }
             }
 
-            await StoreFetch(datasetVersion, fetch);
+            await StoreFetch(datasetVersion, newFetch);
         }
     }
 
@@ -93,10 +94,10 @@ public class Helper(IStorageService storageService)
                 string relativePath = "";
                 if (currentVersion != compareToVersion)
                 {
-                    relativePath = "../" + Uri.EscapeDataString(GetVersionPath(compareToVersion)) + '/';
+                    relativePath = "../" + UrlEncodePath(GetVersionPath(compareToVersion)) + '/';
                 }
 
-                url = relativePath + Uri.EscapeDataString(itemsWithEqualChecksum.First().FilePath);
+                url = relativePath + UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
                 return true;
             }
 
@@ -126,7 +127,7 @@ public class Helper(IStorageService storageService)
         var fetch = await LoadFetch(datasetVersion);
 
         // Is deduplicating with the current version overkill?
-       
+
         // First try deduplicating within current version, if that fails, try with previous version 
         if (!TryDeduplicate(bagItItem, datasetVersion, datasetVersion, manifest, fetch, out string url) &&
             TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
@@ -150,14 +151,7 @@ public class Helper(IStorageService storageService)
             // File is not a duplicate, remove from fetch if present there
             if (fetch.RemoveItem(bagItItem.FilePath))
             {
-                if (fetch.Items.Any())
-                {
-                    await StoreFetch(datasetVersion, fetch);
-                }
-                else
-                {
-                    await storageService.DeleteFile(GetFullFilePath(datasetVersion, fetchFileName));
-                }
+                await StoreFetch(datasetVersion, fetch);
             }
         }
 
@@ -197,15 +191,23 @@ public class Helper(IStorageService storageService)
 
         if (fetch.TryGetItem(filePath, out var fetchItem))
         {
-            filePath = fetchItem.FilePath;
+            filePath = DecodeUrlEncodedPath(fetchItem.Url);
         }
 
-        return await storageService.GetFileData(GetFullFilePath(datasetVersion, filePath));
+        if (filePath.StartsWith("../"))
+        {
+            filePath = GetDatasetPath(datasetVersion) + filePath[2..];
+        }
+        else
+        {
+            filePath = GetFullFilePath(datasetVersion, filePath);
+        }
+
+        return await storageService.GetFileData(filePath);
     }
 
     public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
     {
-        string path = GetDatasetVersionPath(datasetVersion);
         var payloadChecksums = await LoadManifest(datasetVersion, true);
         var tagChecksums = await LoadManifest(datasetVersion, false);
         var fetch = await LoadFetch(datasetVersion);
@@ -216,17 +218,11 @@ public class Helper(IStorageService storageService)
             return manifest.TryGetItem(filePath, out var value) ? Convert.ToHexString(value.Checksum) : null;
         }
 
-        await foreach (var file in storageService.ListFiles(path))
+        await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
         {
-            file.Id = file.Id[(path.Length + 1)..];
+            file.Sha256 = GetChecksum(file.Id);
 
-            if (file.Id.StartsWith("data/") || 
-                file.Id.StartsWith("documentation/"))
-            {
-                file.Sha256 = GetChecksum(file.Id);
-
-                yield return file;
-            }
+            yield return file;
         }
 
         foreach (var file in fetch.Items)
@@ -274,6 +270,12 @@ public class Helper(IStorageService storageService)
     private static string GetFetchFilePath(DatasetVersionIdentifier datasetVersion) =>
         GetFullFilePath(datasetVersion, fetchFileName);
 
+    private static string UrlEncodePath(string path) =>
+        string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
+
+    private static string DecodeUrlEncodedPath(string path) =>
+        string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
+
     private async Task<BagItManifest> LoadManifest(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
         var fileData = await storageService.GetFileData(GetManifestFilePath(datasetVersion, payloadManifest));
@@ -298,23 +300,6 @@ public class Helper(IStorageService storageService)
         return await BagItFetch.Parse(fileData.Stream);
     }
 
-    private async Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item)
-    {
-        bool payload = item.FilePath.StartsWith("data/");
-        var manifest = await LoadManifest(datasetVersion, payload);
-        manifest.AddOrUpdateItem(item);
-
-        await StoreManifest(datasetVersion, payload, manifest);
-    }
-
-    private async Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item)
-    {
-        var fetch = await LoadFetch(datasetVersion);
-        fetch.AddOrUpdateItem(item);
-
-        await StoreFetch(datasetVersion, fetch);
-    }
-
     private async Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath)
     {
         bool payloadManifest = filePath.StartsWith("data/");
@@ -322,14 +307,7 @@ public class Helper(IStorageService storageService)
 
         if (manifest.RemoveItem(filePath))
         {
-            if (manifest.Items.Any())
-            {
-                await StoreManifest(datasetVersion, payloadManifest, manifest);
-            }
-            else
-            {
-                await storageService.DeleteFile(GetManifestFilePath(datasetVersion, payloadManifest));
-            }
+            await StoreManifest(datasetVersion, payloadManifest, manifest);
         }
     }
 
@@ -339,22 +317,49 @@ public class Helper(IStorageService storageService)
 
         if (fetch.RemoveItem(filePath))
         {
-            if (fetch.Items.Any())
-            {
-                await StoreFetch(datasetVersion, fetch);
-            }
-            else
-            {
-                await storageService.DeleteFile(GetFetchFilePath(datasetVersion));
-            }
+            await StoreFetch(datasetVersion, fetch);
         }
     }
 
-    private Task<RoCrateFile> StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest) =>
-         storageService.StoreFile(GetManifestFilePath(datasetVersion, payload), new MemoryStream(manifest.Serialize()));
+    private Task StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest)
+    {
+        string filePath = GetManifestFilePath(datasetVersion, payload);
 
-    private Task<RoCrateFile> StoreFetch(DatasetVersionIdentifier datasetVersion, BagItFetch fetch) =>
-        storageService.StoreFile(GetFetchFilePath(datasetVersion), new MemoryStream(fetch.Serialize()));
+        if (manifest.Items.Any())
+        {
+            return storageService.StoreFile(filePath, new MemoryStream(manifest.Serialize()));
+        }
+
+        return storageService.DeleteFile(filePath);
+    }
+
+    private Task StoreFetch(DatasetVersionIdentifier datasetVersion, BagItFetch fetch)
+    {
+        string filePath = GetFetchFilePath(datasetVersion);
+
+        if (fetch.Items.Any())
+        {
+            return storageService.StoreFile(filePath, new MemoryStream(fetch.Serialize()));
+        }
+
+        return storageService.DeleteFile(filePath);
+    }
+
+    private async IAsyncEnumerable<RoCrateFile> ListFilesForDatasetVersion(DatasetVersionIdentifier datasetVersion)
+    {
+        string path = GetDatasetVersionPath(datasetVersion);
+
+        await foreach (var file in storageService.ListFiles(path))
+        {
+            file.Id = file.Id[(path.Length + 1)..];
+
+            if (file.Id.StartsWith("data/") ||
+                file.Id.StartsWith("documentation/"))
+            {
+                yield return file;
+            }
+        }
+    }
 
     private static bool TryGetPreviousVersionNumber(string versionNumber, out string previousVersionNumber)
     {

@@ -1,5 +1,6 @@
 using DatasetFileUpload.Controllers.Filters;
 using DatasetFileUpload.Models;
+using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -26,7 +27,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await new Helper(storageService).SetupVersion(datasetVersion);
+        await new FileServiceImplementation(storageService).SetupVersion(datasetVersion);
 
         return Ok();
     }
@@ -75,7 +76,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
                 try
                 {                  
-                    return await new Helper(storageService).Upload(datasetVersion, type, filePath, section.Body);
+                    return await new FileServiceImplementation(storageService).Upload(datasetVersion, type, filePath, section.Body);
                 }
                 catch (IllegalPathException)
                 {
@@ -106,7 +107,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         try
         {
-            await new Helper(storageService).Delete(datasetVersion, type, filePath);
+            await new FileServiceImplementation(storageService).Delete(datasetVersion, type, filePath);
         }
         catch (IllegalPathException)
         {
@@ -126,7 +127,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         try
         {
-            var fileData = await new Helper(storageService).GetData(datasetVersion, type, filePath);
+            var fileData = await new FileServiceImplementation(storageService).GetData(datasetVersion, type, filePath);
 
             if (fileData == null)
             {
@@ -152,7 +153,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await foreach (var file in new Helper(storageService).ListFiles(datasetVersion))
+        await foreach (var file in new FileServiceImplementation(storageService).ListFiles(datasetVersion))
         {
             yield return file;
         }
