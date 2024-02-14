@@ -77,32 +77,37 @@ public class FileServiceImplementation(IStorageService storageService)
         {
             var itemsWithEqualChecksum = manifest.GetItemsByChecksum(item.Checksum);
 
-            if (itemsWithEqualChecksum.Any())
+            if (!itemsWithEqualChecksum.Any())
             {
-                // If we find an item with equal checksum in fetch.txt, use that URL
-                foreach (var candidate in itemsWithEqualChecksum)
-                {
-                    if (fetch.TryGetItem(candidate.FilePath, out var fetchItem))
-                    {
-                        url = fetchItem.Url;
-                        return true;
-                    }
-                }
-
-                // Nothing found in fetch.txt, simply take first item's file path
-
-                string relativePath = "";
-                if (currentVersion != compareToVersion)
-                {
-                    relativePath = "../" + UrlEncodePath(GetVersionPath(compareToVersion)) + '/';
-                }
-
-                url = relativePath + UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
-                return true;
+                url = "";
+                return false;
             }
 
-            url = "";
-            return false;
+            string relativePath = "";
+            if (currentVersion != compareToVersion)
+            {
+                relativePath = "../" + UrlEncodePath(GetVersionPath(compareToVersion)) + '/';
+            }
+
+            // If we find an item with equal checksum in fetch.txt, use that URL
+            foreach (var candidate in itemsWithEqualChecksum)
+            {
+                if (fetch.TryGetItem(candidate.FilePath, out var fetchItem))
+                {
+                    url = fetchItem.Url;
+
+                    if (!url.StartsWith("../"))
+                    {
+                        url = relativePath + url;
+                    }
+
+                    return true;
+                }
+            }
+
+            // Nothing found in fetch.txt, simply take first item's file path
+            url = relativePath + UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
+            return true;
         }
 
         filePath = GetFilePathOrThrow(type, filePath);
