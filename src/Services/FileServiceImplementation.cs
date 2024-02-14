@@ -70,14 +70,13 @@ public class FileServiceImplementation(IStorageService storageService)
         Stream data)
     {
         static bool TryDeduplicate(
-            BagItManifestItem item,
-            DatasetVersionIdentifier currentVersion,
+            byte[] checksum,
             DatasetVersionIdentifier compareToVersion,
             BagItManifest manifest,
             BagItFetch fetch,
             out string url)
         {
-            var itemsWithEqualChecksum = manifest.GetItemsByChecksum(item.Checksum);
+            var itemsWithEqualChecksum = manifest.GetItemsByChecksum(checksum);
 
             if (!itemsWithEqualChecksum.Any())
             {
@@ -102,7 +101,7 @@ public class FileServiceImplementation(IStorageService storageService)
             return true;
         }
 
-        async Task<string?> Deduplicate(BagItManifestItem manifestItem, BagItFetch fetch)
+        async Task<string?> Deduplicate(byte[] checksum)
         {
             if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
             {
@@ -113,7 +112,7 @@ public class FileServiceImplementation(IStorageService storageService)
             var prevManifest = await LoadManifest(prevVersion, type == FileType.Data);
             var prevFetch = await LoadFetch(prevVersion);
 
-            if (TryDeduplicate(manifestItem, datasetVersion, prevVersion, prevManifest, prevFetch, out string url))
+            if (TryDeduplicate(checksum, prevVersion, prevManifest, prevFetch, out string url))
             {
                 return url;
             }
@@ -137,15 +136,13 @@ public class FileServiceImplementation(IStorageService storageService)
         var result = await storageService.StoreFile(fullFilePath, monitoringStream);
 
         byte[] checksum = sha256.Hash!;
-
-        var manifestItem = new BagItManifestItem(filePath, sha256.Hash!);
         var fetch = await LoadFetch(datasetVersion);
 
-        string? url = await Deduplicate(manifestItem, fetch);
+        string? url = await Deduplicate(checksum);
         if (url != null)
         {
             // Deduplication was successful, store in fetch and delete uploaded file
-            fetch.AddOrUpdateItem(new(manifestItem.FilePath, bytesRead, url));
+            fetch.AddOrUpdateItem(new(filePath, bytesRead, url));
             await StoreFetch(datasetVersion, fetch);
 
             await storageService.DeleteFile(fullFilePath);
@@ -153,7 +150,7 @@ public class FileServiceImplementation(IStorageService storageService)
         else
         {
             // File is not a duplicate, remove from fetch if present there
-            if (fetch.RemoveItem(manifestItem.FilePath))
+            if (fetch.RemoveItem(filePath))
             {
                 await StoreFetch(datasetVersion, fetch);
             }
@@ -161,7 +158,7 @@ public class FileServiceImplementation(IStorageService storageService)
 
         // Update manifest
         var manifest = await LoadManifest(datasetVersion, type == FileType.Data);
-        manifest.AddOrUpdateItem(manifestItem);
+        manifest.AddOrUpdateItem(new(filePath, checksum));
         await StoreManifest(datasetVersion, type == FileType.Data, manifest);
 
         //result.Id = fileName; ??
