@@ -21,9 +21,6 @@ public class FileServiceImplementation(IStorageService storageService)
 
     public async Task SetupVersion(DatasetVersionIdentifier datasetVersion)
     {
-        // Must check to see if version already exists in storage, so that we do not overwrite?
-        // Possibly erase everything before proceeding?
-
         async Task CopyManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion, bool payload)
         {
             var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, payload));
@@ -31,6 +28,13 @@ public class FileServiceImplementation(IStorageService storageService)
             {
                 await storageService.StoreFile(GetManifestFilePath(toVersion, payload), fileData.Stream);
             }
+        }
+
+        if (await storageService.ListFiles(GetDatasetVersionPath(datasetVersion))
+                .GetAsyncEnumerator().MoveNextAsync())
+        {
+            // Files are already present for datasetVersion, abort
+            return;
         }
 
         if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out string previousVersionNr))
