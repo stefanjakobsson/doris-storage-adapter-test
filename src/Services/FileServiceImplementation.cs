@@ -106,10 +106,10 @@ public class FileServiceImplementation(IStorageService storageService)
         string fullFilePath = GetFullFilePath(datasetVersion, filePath);
 
         using var sha256 = SHA256.Create();
-        using var hashStream = new CryptoStream(data, sha256, CryptoStreamMode.Read);
+        var hashStream = new CryptoStream(data, sha256, CryptoStreamMode.Read);
 
         long bytesRead = 0;
-        using var monitoringStream = new MonitoringStream(hashStream);
+        var monitoringStream = new MonitoringStream(hashStream);
         monitoringStream.DidRead += (_, e) =>
         {
             bytesRead += e.Count;

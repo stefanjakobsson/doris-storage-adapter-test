@@ -8,10 +8,10 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.Disk;
 
-// TODO How handle illegal file name characters, which are different on Windows/Linux?
-
 internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfiguration> configuration) : IStorageService
 {
+    private static readonly HashSet<char> invalidFileNameChars = [.. Path.GetInvalidFileNameChars()];
+
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
@@ -143,11 +143,18 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
 
     private static string GetPathOrThrow(string path, string basePath)
     {
+        void Throw() => throw new IllegalPathException(path);
+
+        if (path.Split('/').Any(c => c.Any(invalidFileNameChars.Contains)))
+        {
+            Throw();
+        }
+
         string result = Path.GetFullPath(path, basePath);
 
         if (!result.StartsWith(basePath))
         {
-            throw new IllegalPathException(path);
+            Throw();
         }
 
         return result;
