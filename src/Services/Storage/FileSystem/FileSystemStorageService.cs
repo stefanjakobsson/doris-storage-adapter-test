@@ -13,6 +13,7 @@ namespace DatasetFileUpload.Services.Storage.Disk;
 internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfiguration> configuration) : IStorageService
 {
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
+    private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
     public Task<StreamWithLength?> GetFileData(string filePath)
     {
@@ -32,13 +33,24 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
+        string tempFile;
+        do
+        {
+            tempFile = Path.Combine(tempFilePath, Path.GetRandomFileName());
+        }
+        while (File.Exists(tempFile));
+
+        using (var stream = new FileStream(tempFile, FileMode.Create))
+        {
+            await data.CopyToAsync(stream);
+        }
+
         if (!Directory.Exists(directoryPath))
         {
             Directory.CreateDirectory(directoryPath);
         }
 
-        using var stream = new FileStream(filePath, FileMode.Create);
-        await data.CopyToAsync(stream);
+        File.Move(tempFile, filePath, true);
 
         var fileInfo = new FileInfo(filePath);
 
