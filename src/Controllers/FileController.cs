@@ -80,7 +80,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
                 }
                 catch (IllegalPathException)
                 {
-                    return IllegalFilePathResult();
+                    return IllegalPathResult();
                 }
             }
 
@@ -111,7 +111,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         }
         catch (IllegalPathException)
         {
-            return IllegalFilePathResult();
+            return IllegalPathResult();
         }
 
         return Ok();
@@ -140,7 +140,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         }
         catch (IllegalPathException)
         {
-            return IllegalFilePathResult();
+            return IllegalPathResult();
         }
     }
 
@@ -164,6 +164,6 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
         identity.FindFirst("DatasetIdentifier")?.Value == datasetVersion.DatasetIdentifier &&
         identity.FindFirst("VersionNumber")?.Value == datasetVersion.VersionNumber;
 
-    private ObjectResult IllegalFilePathResult() =>
-        Problem("Illegal file path.", statusCode: 400);
+    private ObjectResult IllegalPathResult() =>
+        Problem("Illegal path.", statusCode: 400);
 }

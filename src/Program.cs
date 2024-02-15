@@ -1,5 +1,6 @@
 using DatasetFileUpload.Services.Auth;
 using DatasetFileUpload.Services.Storage;
+using DatasetFileUpload.Services.Storage.Disk;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,7 +61,12 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddTransient<IStorageService, DiskStorageService>();
+builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
+
+builder.Services.AddOptions<FileSystemStorageServiceConfiguration>()
+    .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 var app = builder.Build();
 

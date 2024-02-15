@@ -30,6 +30,8 @@ public class BagItManifest
         return result;
     }
 
+    public bool Contains(string filePath) => items.ContainsKey(filePath);
+
     public bool TryGetItem(string filePath, out BagItManifestItem item)
     {
         if (items.TryGetValue(filePath, out var value))

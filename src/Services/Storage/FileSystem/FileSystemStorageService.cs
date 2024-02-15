@@ -1,22 +1,22 @@
 using DatasetFileUpload.Models;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage;
+namespace DatasetFileUpload.Services.Storage.Disk;
 
 // TODO How handle illegal file name characters, which are different on Windows/Linux?
 
-internal class DiskStorageService(IConfiguration configuration) : IStorageService
+internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfiguration> configuration) : IStorageService
 {
-    private readonly IConfiguration configuration = configuration;
+    private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
 
     public Task<StreamWithLength?> GetFileData(string filePath)
     {
-        filePath = GetPathOrThrow(filePath, GetBasePath());
+        filePath = GetPathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
         {
@@ -29,7 +29,6 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 
     public async Task<RoCrateFile> StoreFile(string filePath, Stream data)
     {
-        string basePath = GetBasePath();
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
@@ -57,7 +56,6 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
 
     public Task DeleteFile(string filePath)
     {
-        string basePath = GetBasePath();
         filePath = GetPathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
@@ -111,7 +109,6 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
             }
         }
 
-        string basePath = GetBasePath();
         path = GetPathOrThrow(path, basePath);
 
         foreach (var file in EnumerateFiles(path)
@@ -131,8 +128,6 @@ internal class DiskStorageService(IConfiguration configuration) : IStorageServic
             };
         }
     }
-
-    private string GetBasePath() => Path.GetFullPath(configuration["Storage:DiskStorageService:BasePath"]!);
 
     private static string GetPathOrThrow(string path, string basePath)
     {
