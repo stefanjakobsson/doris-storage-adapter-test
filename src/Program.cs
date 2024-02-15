@@ -61,6 +61,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
 
 builder.Services.AddAuthorization();
 
+//builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
 builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
 
 builder.Services.AddOptions<FileSystemStorageServiceConfiguration>()
