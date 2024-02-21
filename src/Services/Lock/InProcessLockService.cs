@@ -49,9 +49,9 @@ internal class InProcessLockService : ILockService
             if (!datasetVersionPathLocks.TryGetValue(datasetVersion, out var pathLocks) ||
                 !pathLocks.TryGetValue(filePath, out semaphore))
             {
-                semaphore = new SemaphoreSlim(1);
                 pathLocks ??= [];
-                pathLocks[filePath] = semaphore;
+                pathLocks[filePath] = semaphore = new SemaphoreSlim(1);
+                datasetVersionPathLocks[datasetVersion] = pathLocks;
             }
 
             return true;
@@ -86,8 +86,7 @@ internal class InProcessLockService : ILockService
 
             if (!datasetVersionLocks.TryGetValue(datasetVersion, out var result))
             {
-                result = new SemaphoreSlim(1);
-                datasetVersionLocks[datasetVersion] = result;
+                datasetVersionLocks[datasetVersion] = result = new SemaphoreSlim(1);
             }
 
             semaphore = result;

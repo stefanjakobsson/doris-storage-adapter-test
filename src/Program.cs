@@ -65,7 +65,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
 builder.Services.AddAuthorization();
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
-builder.Services.AddTransient<FileServiceImplementation>();
+builder.Services.AddTransient<FileService>();
 
 builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
 //builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
@@ -94,7 +94,7 @@ app.MapControllers();
 // Generate service token and print it to the terminal (for testing purposes)
 if(app.Environment.IsDevelopment())
 {
-    TokenService tokenService = new TokenService(builder.Configuration);
+    TokenService tokenService = new(builder.Configuration);
     Console.WriteLine("ServiceToken:");
     Console.WriteLine(tokenService.GetServiceToken());
     Console.WriteLine("");

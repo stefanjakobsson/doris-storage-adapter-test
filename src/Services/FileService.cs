@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services;
 
-public class FileServiceImplementation(
+public class FileService(
     IStorageService storageService,
     ILockService lockService)
 {
@@ -352,18 +352,31 @@ public class FileServiceImplementation(
         return await BagItFetch.Parse(fileData.Stream);
     }
 
-    private async Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item)
-    {
-        bool payload = item.FilePath.StartsWith("data/");
-        string manifestFilePath = GetManifestFileName(payload);
+    private Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item) =>
+        LockAndUpdateManifest(datasetVersion, item.FilePath.StartsWith("data/"), manifest => manifest.AddOrUpdateItem(item));
 
+    private Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item) =>
+        LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item));
+
+    private Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath) =>
+        LockAndUpdateManifest(datasetVersion, filePath.StartsWith("data/"), manifest => manifest.RemoveItem(filePath));
+
+    private Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath) =>
+        LockAndUpdateFetch(datasetVersion, fetch => fetch.RemoveItem(filePath));
+
+    private async Task LockAndUpdateManifest(DatasetVersionIdentifier datasetVersion, bool payload, Func<BagItManifest, bool> action)
+    {
+        // This method assumes that datasetVersion is not locked for writing,
+        // i.e. that it is called "within" a file lock.
+
+        string manifestFilePath = GetManifestFileName(payload);
         await lockService.LockFilePath(datasetVersion, manifestFilePath);
 
         try
         {
             var manifest = await LoadManifest(datasetVersion, payload);
 
-            if (manifest.AddOrUpdateItem(item))
+            if (action(manifest))
             {
                 await StoreManifest(datasetVersion, payload, manifest);
             }
@@ -374,57 +387,18 @@ public class FileServiceImplementation(
         }
     }
 
-    private async Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item)
+    private async Task LockAndUpdateFetch(DatasetVersionIdentifier datasetVersion, Func<BagItFetch, bool> action)
     {
+        // This method assumes that datasetVersion is not locked for writing,
+        // i.e. that it is called "within" a file lock.
+
         await lockService.LockFilePath(datasetVersion, fetchFileName);
 
         try
         {
             var fetch = await LoadFetch(datasetVersion);
 
-            if (fetch.AddOrUpdateItem(item))
-            {
-                await StoreFetch(datasetVersion, fetch);
-            }
-        }
-        finally
-        {
-            await lockService.ReleaseFilePathLock(datasetVersion, fetchFileName);
-        }
-    }
-
-    private async Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath)
-    {
-        bool payload = filePath.StartsWith("data/");
-        string manifestFilePath = GetManifestFileName(payload);
-
-        await lockService.LockFilePath(datasetVersion, manifestFilePath);
-
-        try
-        {
-            bool payloadManifest = filePath.StartsWith("data/");
-            var manifest = await LoadManifest(datasetVersion, payloadManifest);
-
-            if (manifest.RemoveItem(filePath))
-            {
-                await StoreManifest(datasetVersion, payloadManifest, manifest);
-            }
-        }
-        finally
-        {
-            await lockService.ReleaseFilePathLock(datasetVersion, manifestFilePath);
-        }
-    }
-
-    private async Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath)
-    {
-        await lockService.LockFilePath(datasetVersion, fetchFileName);
-
-        try
-        {
-            var fetch = await LoadFetch(datasetVersion);
-
-            if (fetch.RemoveItem(filePath))
+            if (action(fetch))
             {
                 await StoreFetch(datasetVersion, fetch);
             }

@@ -9,14 +9,9 @@ using System.Text;
 
 namespace DatasetFileUpload.Services.Auth;
 
-public class TokenService
+public class TokenService(IConfiguration configuration)
 {
-    private readonly IConfiguration configuration;
-
-    public TokenService(IConfiguration configuration)
-    {
-        this.configuration = configuration;
-    }
+    private readonly IConfiguration configuration = configuration;
 
     public string GetUploadToken(AuthInfo user, DatasetVersionIdentifier datasetVersion)
     {

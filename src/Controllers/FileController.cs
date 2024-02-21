@@ -1,7 +1,6 @@
 using DatasetFileUpload.Controllers.Filters;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
-using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -17,10 +16,10 @@ using System.Threading.Tasks;
 namespace DatasetFileUpload.Controllers;
 
 [ApiController]
-public class FileController(ILogger<FileController> logger, FileServiceImplementation fileService) : Controller
+public class FileController(ILogger<FileController> logger, FileService fileService) : Controller
 {
     private readonly ILogger logger = logger;
-    private readonly FileServiceImplementation fileService = fileService;
+    private readonly FileService fileService = fileService;
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
@@ -28,7 +27,14 @@ public class FileController(ILogger<FileController> logger, FileServiceImplement
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.SetupVersion(datasetVersion);
+        try
+        {
+            await fileService.SetupVersion(datasetVersion);
+        }
+        catch (ConflictException)
+        {
+            return ConflictResult();
+        }
 
         return Ok();
     }
@@ -76,12 +82,16 @@ public class FileController(ILogger<FileController> logger, FileServiceImplement
                     datasetIdentifier, versionNumber, type, filePath);
 
                 try
-                {                  
+                {
                     return await fileService.Upload(datasetVersion, type, filePath, section.Body);
                 }
                 catch (IllegalPathException)
                 {
                     return IllegalPathResult();
+                }
+                catch (ConflictException)
+                {
+                    return ConflictResult();
                 }
             }
 
@@ -113,6 +123,10 @@ public class FileController(ILogger<FileController> logger, FileServiceImplement
         catch (IllegalPathException)
         {
             return IllegalPathResult();
+        }
+        catch (ConflictException)
+        {
+            return ConflictResult();
         }
 
         return Ok();
@@ -167,4 +181,7 @@ public class FileController(ILogger<FileController> logger, FileServiceImplement
 
     private ObjectResult IllegalPathResult() =>
         Problem("Illegal path.", statusCode: 400);
+
+    private ObjectResult ConflictResult() =>
+        Problem("Write conflict.", statusCode: 409); 
 }
