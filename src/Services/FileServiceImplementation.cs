@@ -228,6 +228,12 @@ public class FileServiceImplementation(
         FileType type,
         string filePath)
     {
+        // Should we add some kind of locking here?
+        // If so we need to distinguish between read and write locks (currently we only have write locks).
+        // The requested file could potentially be added to fetch and removed from current version
+        // after we found it in fetch and try to load it from current version, which will return
+        // not found to the caller.
+
         filePath = GetFilePathOrThrow(type, filePath);
 
         var fetch = await LoadFetch(datasetVersion);
@@ -246,6 +252,11 @@ public class FileServiceImplementation(
 
     public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
     {
+        // Should we add some kind of locking here?
+        // If so we need to distinguish between read and write locks (currently we only have write locks).
+        // Checksums and fetch can potentially be changed while processing this request,
+        // leading to returning faulty checksums and other problems.
+
         var payloadChecksums = await LoadManifest(datasetVersion, true);
         var tagChecksums = await LoadManifest(datasetVersion, false);
         var fetch = await LoadFetch(datasetVersion);
@@ -297,13 +308,16 @@ public class FileServiceImplementation(
         datasetVersion.DatasetIdentifier + '-' + datasetVersion.VersionNumber;
 
     private static string GetDatasetVersionPath(DatasetVersionIdentifier datasetVersion) =>
-       GetDatasetPath(datasetVersion) + '/' + GetVersionPath(datasetVersion);
+        GetDatasetPath(datasetVersion) + '/' + GetVersionPath(datasetVersion);
 
     private static string GetFullFilePath(DatasetVersionIdentifier datasetVersion, string filePath) =>
         GetDatasetVersionPath(datasetVersion) + '/' + filePath;
 
+    private static string GetManifestFileName(bool payload) => 
+        payload ? payloadManifestSha256FileName : tagManifestSha256FileName
+
     private static string GetManifestFilePath(DatasetVersionIdentifier datasetVersion, bool payload) =>
-        GetFullFilePath(datasetVersion, payload ? payloadManifestSha256FileName : tagManifestSha256FileName);
+        GetFullFilePath(datasetVersion, GetManifestFileName(payload));
 
     private static string GetFetchFilePath(DatasetVersionIdentifier datasetVersion) =>
         GetFullFilePath(datasetVersion, fetchFileName);
@@ -341,11 +355,12 @@ public class FileServiceImplementation(
     private async Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item)
     {
         bool payload = item.FilePath.StartsWith("data/");
-        string filePath = GetManifestFilePath(datasetVersion, payload);
+        string manifestFilePath = GetManifestFileName(payload);
+
+        await lockService.LockFilePath(datasetVersion, manifestFilePath);
 
         try
         {
-           // await fileLockService.WaitForLock(datasetVersion, filePath);
             var manifest = await LoadManifest(datasetVersion, payload);
 
             if (manifest.AddOrUpdateItem(item))
@@ -355,38 +370,68 @@ public class FileServiceImplementation(
         }
         finally
         {
-            //await fileLockService.ReleaseLock(datasetVersion, filePath);
+            await lockService.ReleaseFilePathLock(datasetVersion, manifestFilePath);
         }
     }
 
     private async Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item)
     {
-        var fetch = await LoadFetch(datasetVersion);
+        await lockService.LockFilePath(datasetVersion, fetchFileName);
 
-        if (fetch.AddOrUpdateItem(item))
+        try
         {
-            await StoreFetch(datasetVersion, fetch);
+            var fetch = await LoadFetch(datasetVersion);
+
+            if (fetch.AddOrUpdateItem(item))
+            {
+                await StoreFetch(datasetVersion, fetch);
+            }
+        }
+        finally
+        {
+            await lockService.ReleaseFilePathLock(datasetVersion, fetchFileName);
         }
     }
 
     private async Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath)
     {
-        bool payloadManifest = filePath.StartsWith("data/");
-        var manifest = await LoadManifest(datasetVersion, payloadManifest);
+        bool payload = filePath.StartsWith("data/");
+        string manifestFilePath = GetManifestFileName(payload);
 
-        if (manifest.RemoveItem(filePath))
+        await lockService.LockFilePath(datasetVersion, manifestFilePath);
+
+        try
         {
-            await StoreManifest(datasetVersion, payloadManifest, manifest);
+            bool payloadManifest = filePath.StartsWith("data/");
+            var manifest = await LoadManifest(datasetVersion, payloadManifest);
+
+            if (manifest.RemoveItem(filePath))
+            {
+                await StoreManifest(datasetVersion, payloadManifest, manifest);
+            }
+        }
+        finally
+        {
+            await lockService.ReleaseFilePathLock(datasetVersion, manifestFilePath);
         }
     }
 
     private async Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath)
     {
-        var fetch = await LoadFetch(datasetVersion);
+        await lockService.LockFilePath(datasetVersion, fetchFileName);
 
-        if (fetch.RemoveItem(filePath))
+        try
         {
-            await StoreFetch(datasetVersion, fetch);
+            var fetch = await LoadFetch(datasetVersion);
+
+            if (fetch.RemoveItem(filePath))
+            {
+                await StoreFetch(datasetVersion, fetch);
+            }
+        }
+        finally
+        {
+            await lockService.ReleaseFilePathLock(datasetVersion, fetchFileName);
         }
     }
 
