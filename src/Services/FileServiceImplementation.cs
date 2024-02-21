@@ -313,8 +313,8 @@ public class FileServiceImplementation(
     private static string GetFullFilePath(DatasetVersionIdentifier datasetVersion, string filePath) =>
         GetDatasetVersionPath(datasetVersion) + '/' + filePath;
 
-    private static string GetManifestFileName(bool payload) => 
-        payload ? payloadManifestSha256FileName : tagManifestSha256FileName
+    private static string GetManifestFileName(bool payload) =>
+        payload ? payloadManifestSha256FileName : tagManifestSha256FileName;
 
     private static string GetManifestFilePath(DatasetVersionIdentifier datasetVersion, bool payload) =>
         GetFullFilePath(datasetVersion, GetManifestFileName(payload));
