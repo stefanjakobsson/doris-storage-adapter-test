@@ -1,6 +1,7 @@
 using DatasetFileUpload.Controllers.Filters;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
+using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -16,10 +17,10 @@ using System.Threading.Tasks;
 namespace DatasetFileUpload.Controllers;
 
 [ApiController]
-public class FileController(ILogger<FileController> logger, IStorageService storageService) : Controller
+public class FileController(ILogger<FileController> logger, FileServiceImplementation fileService) : Controller
 {
     private readonly ILogger logger = logger;
-    private readonly IStorageService storageService = storageService;
+    private readonly FileServiceImplementation fileService = fileService;
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
@@ -27,7 +28,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await new FileServiceImplementation(storageService).SetupVersion(datasetVersion);
+        await fileService.SetupVersion(datasetVersion);
 
         return Ok();
     }
@@ -76,7 +77,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
                 try
                 {                  
-                    return await new FileServiceImplementation(storageService).Upload(datasetVersion, type, filePath, section.Body);
+                    return await fileService.Upload(datasetVersion, type, filePath, section.Body);
                 }
                 catch (IllegalPathException)
                 {
@@ -107,7 +108,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         try
         {
-            await new FileServiceImplementation(storageService).Delete(datasetVersion, type, filePath);
+            await fileService.Delete(datasetVersion, type, filePath);
         }
         catch (IllegalPathException)
         {
@@ -127,7 +128,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         try
         {
-            var fileData = await new FileServiceImplementation(storageService).GetData(datasetVersion, type, filePath);
+            var fileData = await fileService.GetData(datasetVersion, type, filePath);
 
             if (fileData == null)
             {
@@ -153,7 +154,7 @@ public class FileController(ILogger<FileController> logger, IStorageService stor
 
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await foreach (var file in new FileServiceImplementation(storageService).ListFiles(datasetVersion))
+        await foreach (var file in fileService.ListFiles(datasetVersion))
         {
             yield return file;
         }

@@ -1,5 +1,6 @@
 ﻿using DatasetFileUpload.Models;
 using DatasetFileUpload.Models.BagIt;
+using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using Nerdbank.Streams;
 using System;
@@ -11,15 +12,35 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services;
 
-public class FileServiceImplementation(IStorageService storageService)
+public class FileServiceImplementation(
+    IStorageService storageService,
+    ILockService lockService)
 {
     private readonly IStorageService storageService = storageService;
+    private readonly ILockService lockService = lockService;
 
     private const string payloadManifestSha256FileName = "manifest-sha256.txt";
     private const string tagManifestSha256FileName = "tagmanifest-sha256.txt";
     private const string fetchFileName = "fetch.txt";
 
     public async Task SetupVersion(DatasetVersionIdentifier datasetVersion)
+    {
+        if (!await lockService.TryLockDatasetVersion(datasetVersion))
+        {
+            throw new ConflictException();
+        }
+
+        try
+        {
+            await SetupVersionImpl(datasetVersion);
+        }
+        finally
+        {
+            await lockService.ReleaseDatasetVersionLock(datasetVersion);
+        }
+    }
+
+    private async Task SetupVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
         async Task CopyManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion, bool payload)
         {
@@ -73,6 +94,29 @@ public class FileServiceImplementation(IStorageService storageService)
         string filePath,
         Stream data)
     {
+        filePath = GetFilePathOrThrow(type, filePath);
+
+        if (!await lockService.TryLockFilePath(datasetVersion, filePath))
+        {
+            throw new ConflictException();
+        }
+
+        try
+        {
+            return await UploadImpl(datasetVersion, type, filePath, data);
+        }
+        finally
+        {
+            await lockService.ReleaseFilePathLock(datasetVersion, filePath);
+        }
+    }
+
+    private async Task<RoCrateFile> UploadImpl(
+        DatasetVersionIdentifier datasetVersion,
+        FileType type,
+        string filePath,
+        Stream data)
+    {
         async Task<string?> Deduplicate(byte[] checksum)
         {
             if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
@@ -106,7 +150,6 @@ public class FileServiceImplementation(IStorageService storageService)
                 UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
         }
 
-        filePath = GetFilePathOrThrow(type, filePath);
         string fullFilePath = GetFullFilePath(datasetVersion, filePath);
 
         using var sha256 = SHA256.Create();
@@ -156,6 +199,25 @@ public class FileServiceImplementation(IStorageService storageService)
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
+        if (!await lockService.TryLockFilePath(datasetVersion, filePath))
+        {
+            throw new ConflictException();
+        }
+
+        try
+        {
+           await DeleteImpl(datasetVersion, filePath);
+        }
+        finally
+        {
+            await lockService.ReleaseFilePathLock(datasetVersion, filePath);
+        }
+    }
+
+    private async Task DeleteImpl(
+        DatasetVersionIdentifier datasetVersion,
+        string filePath)
+    {
         await storageService.DeleteFile(GetFullFilePath(datasetVersion, filePath));
         await RemoveItemFromManifest(datasetVersion, filePath);
         await RemoveItemFromFetch(datasetVersion, filePath);
@@ -279,11 +341,21 @@ public class FileServiceImplementation(IStorageService storageService)
     private async Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item)
     {
         bool payload = item.FilePath.StartsWith("data/");
-        var manifest = await LoadManifest(datasetVersion, payload);
+        string filePath = GetManifestFilePath(datasetVersion, payload);
 
-        if (manifest.AddOrUpdateItem(item))
+        try
         {
-            await StoreManifest(datasetVersion, payload, manifest);
+           // await fileLockService.WaitForLock(datasetVersion, filePath);
+            var manifest = await LoadManifest(datasetVersion, payload);
+
+            if (manifest.AddOrUpdateItem(item))
+            {
+                await StoreManifest(datasetVersion, payload, manifest);
+            }
+        }
+        finally
+        {
+            //await fileLockService.ReleaseLock(datasetVersion, filePath);
         }
     }
 
