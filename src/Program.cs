@@ -67,8 +67,8 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
 builder.Services.AddTransient<FileService>();
 
-builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
-//builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
+//builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
+builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
 
 builder.Services.AddOptions<FileSystemStorageServiceConfiguration>()
     .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))

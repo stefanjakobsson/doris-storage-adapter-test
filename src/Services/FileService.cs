@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services;
@@ -22,6 +23,8 @@ public class FileService(
     private const string payloadManifestSha256FileName = "manifest-sha256.txt";
     private const string tagManifestSha256FileName = "tagmanifest-sha256.txt";
     private const string fetchFileName = "fetch.txt";
+    private const string bagItFileName = "bagit.txt";
+    private const string bagInfoFileName = "bag-info.txt";
 
     public async Task SetupVersion(DatasetVersionIdentifier datasetVersion)
     {
@@ -86,6 +89,66 @@ public class FileService(
         }
 
         await StoreFetch(datasetVersion, newFetch);
+    }
+
+    public async Task PublishVersion(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
+    {
+        if (!await lockService.TryLockDatasetVersion(datasetVersion))
+        {
+            throw new ConflictException();
+        }
+
+        try
+        {
+            await PublishVersionImpl(datasetVersion, openAccess, doi);
+        }
+        finally
+        {
+            await lockService.ReleaseDatasetVersionLock(datasetVersion);
+        }
+    }
+
+    private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
+    {
+        async Task<byte[]> WriteTextToFile(string filePath, string text)
+        {
+            using var sha256 = SHA256.Create();
+            using var hashStream = new CryptoStream(new MemoryStream(Encoding.UTF8.GetBytes(text)), sha256, CryptoStreamMode.Read);
+            await storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), hashStream);
+            return sha256.Hash!;
+        }
+
+        async Task<byte[]?> GetChecksum(string filePath)
+        {
+            using var sha256 = SHA256.Create();
+            var fileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, filePath));
+
+            if (fileData == null)
+            {
+                return null;
+            }
+
+            return sha256.ComputeHash(fileData.Stream);
+        }
+
+        // Kolla om redan publicerat, behövs anrop för att kolla om fil finns?
+
+        var bagItChecksum = await WriteTextToFile(bagItFileName, 
+            "BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8");
+
+        var bagInfoChecksum = await WriteTextToFile(bagInfoFileName, "Dummy: true");
+
+        var payloadManifestChecksum = await GetChecksum(payloadManifestSha256FileName);
+
+        // Add bagit.txt, bag-info.txt and manifest-sha256.txt to tagmanifest-sha256.txt
+        var tagManifest = await LoadManifest(datasetVersion, false);
+        tagManifest.AddOrUpdateItem(new(bagItFileName, bagItChecksum));
+        tagManifest.AddOrUpdateItem(new(bagInfoFileName, bagInfoChecksum));
+        if (payloadManifestChecksum != null)
+        {
+            tagManifest.AddOrUpdateItem(new(payloadManifestSha256FileName, payloadManifestChecksum));
+        }
+        await StoreManifest(datasetVersion, false, tagManifest);
     }
 
     public async Task<RoCrateFile> Upload(

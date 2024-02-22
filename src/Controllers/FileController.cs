@@ -39,6 +39,24 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         return Ok();
     }
 
+    [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
+    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<IActionResult> PublishVersion(string datasetIdentifier, string versionNumber)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        try
+        {
+            await fileService.PublishVersion(datasetVersion, true, "test");
+        }
+        catch (ConflictException)
+        {
+            return ConflictResult();
+        }
+
+        return Ok();
+    }
+
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     // Disable form value model binding to ensure that files are not buffered
