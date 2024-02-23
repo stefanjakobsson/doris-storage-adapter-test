@@ -37,6 +37,7 @@ public class FileService(
 
         try
         {
+            await ThrowIfPublished(datasetVersion);
             await SetupVersionImpl(datasetVersion);
         }
         finally
@@ -102,6 +103,7 @@ public class FileService(
 
         try
         {
+            await ThrowIfPublished(datasetVersion);
             await PublishVersionImpl(datasetVersion, openAccess, doi);
         }
         finally
@@ -135,8 +137,6 @@ public class FileService(
 
             return sha256.ComputeHash(fileData.Stream);
         }
-
-        // Kolla om redan publicerat, behövs anrop för att kolla om fil finns?
 
         var payloadManifest = await LoadManifest(datasetVersion, true);
         var fetch = await LoadFetch(datasetVersion);
@@ -212,6 +212,7 @@ public class FileService(
 
         try
         {
+            await ThrowIfPublished(datasetVersion);
             return await UploadImpl(datasetVersion, type, filePath, data);
         }
         finally
@@ -315,7 +316,8 @@ public class FileService(
 
         try
         {
-           await DeleteImpl(datasetVersion, filePath);
+            await ThrowIfPublished(datasetVersion);
+            await DeleteImpl(datasetVersion, filePath);
         }
         finally
         {
@@ -555,6 +557,17 @@ public class FileService(
             {
                 yield return file;
             }
+        }
+    }
+
+    private Task<bool> VersionIsPublished(DatasetVersionIdentifier datasetVersion) =>
+        storageService.FileExists(GetFullFilePath(datasetVersion, bagItFileName));
+
+    private async Task ThrowIfPublished(DatasetVersionIdentifier datasetVersion)
+    {
+        if (await VersionIsPublished(datasetVersion))
+        {
+            throw new AlreadyPublishedException();
         }
     }
 

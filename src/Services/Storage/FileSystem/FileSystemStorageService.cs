@@ -15,19 +15,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
-    public Task<StreamWithLength?> GetFileData(string filePath)
-    {
-        filePath = GetPathOrThrow(filePath, basePath);
-
-        if (!File.Exists(filePath))
-        {
-            return Task.FromResult<StreamWithLength?>(null);
-        }
-
-        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
-    }
-
+  
     public async Task<RoCrateFile> StoreFile(string filePath, Stream data)
     {
         filePath = GetPathOrThrow(filePath, basePath);
@@ -91,6 +79,26 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<bool> FileExists(string filePath)
+    {
+        filePath = GetPathOrThrow(filePath, basePath);
+
+        return Task.FromResult(File.Exists(filePath));
+    }
+
+    public Task<StreamWithLength?> GetFileData(string filePath)
+    {
+        filePath = GetPathOrThrow(filePath, basePath);
+
+        if (!File.Exists(filePath))
+        {
+            return Task.FromResult<StreamWithLength?>(null);
+        }
+
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
     }
 
     public async IAsyncEnumerable<RoCrateFile> ListFiles(string path)

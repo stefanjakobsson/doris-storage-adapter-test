@@ -10,10 +10,26 @@ internal class InMemoryStorageService : IStorageService
 {
     private readonly Dictionary<string, InMemoryFile> files = [];
 
+    public async Task<RoCrateFile> StoreFile(string filePath, Stream stream)
+    {
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+
+        var file = new InMemoryFile(DateTime.UtcNow, DateTime.UtcNow, memoryStream.ToArray());
+        files[filePath] = file;
+
+        return MapFile(filePath, file);
+    }
+
     public Task DeleteFile(string filePath)
     {
         files.Remove(filePath);
         return Task.CompletedTask;
+    }
+
+    public Task<bool> FileExists(string filePath)
+    {
+        return Task.FromResult(files.ContainsKey(filePath));
     }
 
     public Task<StreamWithLength?> GetFileData(string filePath)
@@ -38,17 +54,6 @@ internal class InMemoryStorageService : IStorageService
                 yield return MapFile(value.Key, value.Value);
             }
         }
-    }
-
-    public async Task<RoCrateFile> StoreFile(string filePath, Stream stream)
-    {
-        using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
-
-        var file = new InMemoryFile(DateTime.UtcNow, DateTime.UtcNow, memoryStream.ToArray());
-        files[filePath] = file;
-
-        return MapFile(filePath, file);
     }
 
     private static RoCrateFile MapFile(string filePath, InMemoryFile file) => new()
