@@ -1,10 +1,12 @@
-﻿using DatasetFileUpload.Models;
+﻿using ByteSizeLib;
+using DatasetFileUpload.Models;
 using DatasetFileUpload.Models.BagIt;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -110,13 +112,16 @@ public class FileService(
 
     private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
     {
-        async Task<byte[]> WriteTextToFile(string filePath, string text)
+        async Task<byte[]> WriteBytesToFile(string filePath, byte[] data)
         {
             using var sha256 = SHA256.Create();
-            using var hashStream = new CryptoStream(new MemoryStream(Encoding.UTF8.GetBytes(text)), sha256, CryptoStreamMode.Read);
+            using var hashStream = new CryptoStream(new MemoryStream(data), sha256, CryptoStreamMode.Read);
             await storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), hashStream);
             return sha256.Hash!;
         }
+
+        Task<byte[]> WriteTextToFile(string filePath, string text) => 
+            WriteBytesToFile(filePath, Encoding.UTF8.GetBytes(text));
 
         async Task<byte[]?> GetChecksum(string filePath)
         {
@@ -133,12 +138,49 @@ public class FileService(
 
         // Kolla om redan publicerat, behövs anrop för att kolla om fil finns?
 
+        var payloadManifest = await LoadManifest(datasetVersion, true);
+        var fetch = await LoadFetch(datasetVersion);
+        long octetCount = 0;
+        long totalSize = 0;
+        await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
+        {
+            totalSize += file.ContentSize;
+            if (file.Id.StartsWith("data/"))
+            {
+                octetCount += file.ContentSize;
+            }
+        }
+        foreach (var item in fetch.Items)
+        {
+            if (item.Length != null)
+            {
+                totalSize += item.Length.Value;
+
+                if (item.FilePath.StartsWith("data/"))
+                {
+                    octetCount += item.Length.Value;
+                }
+            }
+        }
+
         var bagItChecksum = await WriteTextToFile(bagItFileName, 
             "BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8");
 
-        var bagInfoChecksum = await WriteTextToFile(bagInfoFileName, "Dummy: true");
+        var bagInfo = new BagItInfo
+        {
+            ExternalIdentifier = doi,
+            BagGroupIdentifier = datasetVersion.DatasetIdentifier,
+            BaggingDate = DateTime.UtcNow,
+            BagSize = ByteSize.FromBytes(totalSize).ToBinaryString(CultureInfo.InvariantCulture),
+            PayloadOxum = new(octetCount, payloadManifest.Items.LongCount()),
+            AccessLevel = openAccess ? BagItInfo.AccessLevelEnum.open : BagItInfo.AccessLevelEnum.restricted,
+            Withdrawn = false
+        };
+        var bagInfoChecksum = await WriteBytesToFile(bagInfoFileName, bagInfo.Serialize());
 
+        // TODO Get these checksums when loading files above instead
         var payloadManifestChecksum = await GetChecksum(payloadManifestSha256FileName);
+        var fetchChecksum = await GetChecksum(fetchFileName);
 
         // Add bagit.txt, bag-info.txt and manifest-sha256.txt to tagmanifest-sha256.txt
         var tagManifest = await LoadManifest(datasetVersion, false);
@@ -147,6 +189,10 @@ public class FileService(
         if (payloadManifestChecksum != null)
         {
             tagManifest.AddOrUpdateItem(new(payloadManifestSha256FileName, payloadManifestChecksum));
+        }
+        if (fetchChecksum != null)
+        {
+            tagManifest.AddOrUpdateItem(new(fetchFileName, fetchChecksum));
         }
         await StoreManifest(datasetVersion, false, tagManifest);
     }
