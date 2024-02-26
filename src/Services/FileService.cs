@@ -114,16 +114,8 @@ public class FileService(
 
     private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
     {
-        async Task<byte[]> WriteBytesToFile(string filePath, byte[] data)
-        {
-            using var sha256 = SHA256.Create();
-            using var hashStream = new CryptoStream(new MemoryStream(data), sha256, CryptoStreamMode.Read);
-            await storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), hashStream);
-            return sha256.Hash!;
-        }
-
-        Task<byte[]> WriteTextToFile(string filePath, string text) => 
-            WriteBytesToFile(filePath, Encoding.UTF8.GetBytes(text));
+        Task WriteBytes(string filePath, byte[] data) => 
+            storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), new MemoryStream(data));
 
         async Task<byte[]?> GetChecksum(string filePath)
         {
@@ -145,7 +137,7 @@ public class FileService(
         await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
         {
             totalSize += file.ContentSize;
-            if (file.Id.StartsWith("data/"))
+            if (IsDataFile(file.Id))
             {
                 octetCount += file.ContentSize;
             }
@@ -156,15 +148,12 @@ public class FileService(
             {
                 totalSize += item.Length.Value;
 
-                if (item.FilePath.StartsWith("data/"))
+                if (IsDataFile(item.FilePath))
                 {
                     octetCount += item.Length.Value;
                 }
             }
         }
-
-        var bagItChecksum = await WriteTextToFile(bagItFileName, 
-            "BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8");
 
         var bagInfo = new BagItInfo
         {
@@ -176,7 +165,9 @@ public class FileService(
             AccessLevel = openAccess ? BagItInfo.AccessLevelEnum.open : BagItInfo.AccessLevelEnum.restricted,
             Withdrawn = false
         };
-        var bagInfoChecksum = await WriteBytesToFile(bagInfoFileName, bagInfo.Serialize());
+        byte[] bagInfoContents = bagInfo.Serialize();
+
+        byte[] bagItContents = Encoding.UTF8.GetBytes("BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8");
 
         // TODO Get these checksums when loading files above instead
         var payloadManifestChecksum = await GetChecksum(payloadManifestSha256FileName);
@@ -184,8 +175,8 @@ public class FileService(
 
         // Add bagit.txt, bag-info.txt and manifest-sha256.txt to tagmanifest-sha256.txt
         var tagManifest = await LoadManifest(datasetVersion, false);
-        tagManifest.AddOrUpdateItem(new(bagItFileName, bagItChecksum));
-        tagManifest.AddOrUpdateItem(new(bagInfoFileName, bagInfoChecksum));
+        tagManifest.AddOrUpdateItem(new(bagItFileName, SHA256.HashData(bagItContents)));
+        tagManifest.AddOrUpdateItem(new(bagInfoFileName, SHA256.HashData(bagInfoContents)));
         if (payloadManifestChecksum != null)
         {
             tagManifest.AddOrUpdateItem(new(payloadManifestSha256FileName, payloadManifestChecksum));
@@ -195,6 +186,9 @@ public class FileService(
             tagManifest.AddOrUpdateItem(new(fetchFileName, fetchChecksum));
         }
         await StoreManifest(datasetVersion, false, tagManifest);
+
+        await WriteBytes(bagInfoFileName, bagInfoContents);
+        await WriteBytes(bagItFileName, bagItContents);
     }
 
     public async Task<RoCrateFile> Upload(
@@ -374,7 +368,7 @@ public class FileService(
 
         string? GetChecksum(string filePath)
         {
-            var manifest = filePath.StartsWith("data/") ? payloadChecksums : tagChecksums;
+            var manifest = IsDataFile(filePath) ? payloadChecksums : tagChecksums;
             return manifest.TryGetItem(filePath, out var value) ? Convert.ToHexString(value.Checksum) : null;
         }
 
@@ -430,6 +424,9 @@ public class FileService(
     private static string GetManifestFilePath(DatasetVersionIdentifier datasetVersion, bool payload) =>
         GetFullFilePath(datasetVersion, GetManifestFileName(payload));
 
+    private static bool IsDataFile(string filePath) => filePath.StartsWith("data/");
+    private static bool IsDocumentationFile(string filePath) => filePath.StartsWith("documentation/");
+
     private static string GetFetchFilePath(DatasetVersionIdentifier datasetVersion) =>
         GetFullFilePath(datasetVersion, fetchFileName);
 
@@ -464,13 +461,13 @@ public class FileService(
     }
 
     private Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item) =>
-        LockAndUpdateManifest(datasetVersion, item.FilePath.StartsWith("data/"), manifest => manifest.AddOrUpdateItem(item));
+        LockAndUpdateManifest(datasetVersion, IsDataFile(item.FilePath), manifest => manifest.AddOrUpdateItem(item));
 
     private Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item) =>
         LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item));
 
     private Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath) =>
-        LockAndUpdateManifest(datasetVersion, filePath.StartsWith("data/"), manifest => manifest.RemoveItem(filePath));
+        LockAndUpdateManifest(datasetVersion, IsDataFile(filePath), manifest => manifest.RemoveItem(filePath));
 
     private Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath) =>
         LockAndUpdateFetch(datasetVersion, fetch => fetch.RemoveItem(filePath));
@@ -552,8 +549,7 @@ public class FileService(
         {
             file.Id = file.Id[(path.Length + 1)..];
 
-            if (file.Id.StartsWith("data/") ||
-                file.Id.StartsWith("documentation/"))
+            if (IsDataFile(file.Id) || IsDocumentationFile(file.Id))
             {
                 yield return file;
             }

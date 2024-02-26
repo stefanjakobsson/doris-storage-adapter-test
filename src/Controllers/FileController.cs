@@ -201,5 +201,10 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         Problem("Illegal path.", statusCode: 400);
 
     private ObjectResult ConflictResult() =>
-        Problem("Write conflict.", statusCode: 409); 
+        Problem("Write conflict.", statusCode: 409);
+
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Route("/error")]
+    public IActionResult HandleError() =>
+        Problem();
 }
