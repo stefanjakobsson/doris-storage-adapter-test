@@ -35,6 +35,10 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         {
             return ConflictResult();
         }
+        catch (DatasetStatusException)
+        {
+            return StatusMismatchResult();
+        }
 
         return Ok();
     }
@@ -70,6 +74,10 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         catch (ConflictException)
         {
             return ConflictResult();
+        }
+        catch (DatasetStatusException)
+        {
+            return StatusMismatchResult();
         }
 
         return Ok();
@@ -129,6 +137,10 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
                 {
                     return ConflictResult();
                 }
+                catch (DatasetStatusException)
+                {
+                    return StatusMismatchResult();
+                }
             }
 
             section = await reader.ReadNextSectionAsync();
@@ -163,6 +175,10 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         catch (ConflictException)
         {
             return ConflictResult();
+        }
+        catch (DatasetStatusException)
+        {
+            return StatusMismatchResult();
         }
 
         return Ok();
@@ -220,6 +236,9 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
 
     private ObjectResult ConflictResult() =>
         Problem("Write conflict.", statusCode: 409);
+
+    private ObjectResult StatusMismatchResult() =>
+        Problem("Status mismatch.", statusCode: 400);
 
     [ApiExplorerSettings(IgnoreApi = true)]
     [Route("/error")]
