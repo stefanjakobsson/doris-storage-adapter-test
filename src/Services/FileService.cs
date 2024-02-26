@@ -171,8 +171,8 @@ public class FileService(
             BaggingDate = DateTime.UtcNow,
             BagSize = ByteSize.FromBytes(totalSize).ToBinaryString(CultureInfo.InvariantCulture),
             PayloadOxum = new(octetCount, payloadManifest?.Manifest?.Items?.LongCount() ?? 0),
-            AccessLevel = openAccess ? BagItInfo.AccessLevelEnum.open : BagItInfo.AccessLevelEnum.restricted,
-            Withdrawn = false
+            AccessRight = openAccess ? BagItInfo.AccessRightEnum.@public : BagItInfo.AccessRightEnum.nonPublic,
+            DatasetStatus = BagItInfo.DatasetStatusEnum.completed
         };
         byte[] bagInfoContents = bagInfo.Serialize();
 
@@ -195,6 +195,45 @@ public class FileService(
         await WriteBytes(bagInfoFileName, bagInfoContents);
         await WriteBytes(bagItFileName, bagItContents);
     }
+
+    public async Task WithdrawVersion(DatasetVersionIdentifier datasetVersion)
+    {
+        if (!await lockService.TryLockDatasetVersion(datasetVersion))
+        {
+            throw new ConflictException();
+        }
+
+        try
+        {
+            if (!await VersionIsPublished(datasetVersion))
+            {
+                throw new Exception();
+            }
+
+            await WithdrawVersionImpl(datasetVersion);
+        }
+        finally
+        {
+            await lockService.ReleaseDatasetVersionLock(datasetVersion);
+        }
+    }
+
+    private async Task WithdrawVersionImpl(DatasetVersionIdentifier datasetVersion)
+    {
+        var bagItFileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
+
+        if (bagItFileData == null)
+        {
+            return;
+        }
+
+        var bagInfo = await BagItInfo.Parse(bagItFileData.Stream);
+
+        //bagInfo.Withdrawn = true;
+
+
+    }
+
 
     public async Task<RoCrateFile> Upload(
         DatasetVersionIdentifier datasetVersion,

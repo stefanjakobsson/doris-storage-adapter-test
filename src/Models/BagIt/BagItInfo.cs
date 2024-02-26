@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -18,11 +21,14 @@ public class BagItInfo
     private const string bagGroupIdentifierLabel = "Bag-Group-Identifier";
     private const string payloadOxumLabel = "Payload-Oxum";
 
-    private const string accessLevelLabel = "Access-Level";
-    private const string withdrawnLabel = "Withdrawn";
+    private const string accessRightLabel = "Access-Right";
+    private const string datasetStatusLabel = "Dataset-Status";
 
-    private const string openAccessValue = "info:eu-repo/semantics/openAccess";
-    private const string restrictedAccessValue = "info:eu-repo/semantics/restrictedAccess";
+    private const string publicAccessRightValue = "http://publications.europa.eu/resource/authority/access-right/PUBLIC";
+    private const string nonPublicAccessRightValue = "http://publications.europa.eu/resource/authority/access-right/NON_PUBLIC";
+
+    private const string completedDatasetStatusValue = "http://publications.europa.eu/resource/authority/dataset-status/COMPLETED";
+    private const string withdrawnDatasetStatusValue = "http://publications.europa.eu/resource/authority/dataset-status/WITHDRAWN";
 
     public DateTime? BaggingDate
     {
@@ -72,27 +78,38 @@ public class BagItInfo
             value.OctetCount.ToString() + '.' + value.StreamCount.ToString());
     }
 
-    public AccessLevelEnum? AccessLevel
+    public AccessRightEnum? AccessRight
     {
-        get => GetValue(accessLevelLabel, v => v switch
+        get => GetValue(accessRightLabel, v => v switch
         {
-            openAccessValue => AccessLevelEnum.open,
-            restrictedAccessValue => AccessLevelEnum.restricted,
-            _ => (AccessLevelEnum?)null
+            publicAccessRightValue => AccessRightEnum.@public,
+            nonPublicAccessRightValue => AccessRightEnum.nonPublic,
+            _ => (AccessRightEnum?)null
         });
 
-        set => SetOrRemoveItem(accessLevelLabel, value switch
+        set => SetOrRemoveItem(accessRightLabel, value switch
         {
-            AccessLevelEnum.open => openAccessValue,
-            AccessLevelEnum.restricted => restrictedAccessValue,
+            AccessRightEnum.@public => publicAccessRightValue,
+            AccessRightEnum.nonPublic => nonPublicAccessRightValue,
             _ => null
         });
     }
 
-    public bool? Withdrawn
+    public DatasetStatusEnum? DatasetStatus
     {
-        get => GetValue(withdrawnLabel, v => bool.TryParse(v, out bool value) ? value : (bool?)null);
-        set => SetOrRemoveItem(withdrawnLabel, value?.ToString());
+        get => GetValue(datasetStatusLabel, v => v switch
+        {
+            completedDatasetStatusValue => DatasetStatusEnum.completed,
+            withdrawnDatasetStatusValue => DatasetStatusEnum.withdrawn,
+            _ => (DatasetStatusEnum?)null
+        });
+
+        set => SetOrRemoveItem(datasetStatusLabel, value switch
+        {
+            DatasetStatusEnum.completed => completedDatasetStatusValue,
+            DatasetStatusEnum.withdrawn => withdrawnDatasetStatusValue,
+            _ => null
+        });
     }
 
     private void SetOrRemoveItem(string label, string? value)
@@ -171,9 +188,15 @@ public class BagItInfo
 
     public record PayloadOxumType(long OctetCount, long StreamCount);
 
-    public enum AccessLevelEnum
+    public enum AccessRightEnum
     { 
-        open, 
-        restricted 
+        @public, 
+        nonPublic
     };
+
+    public enum DatasetStatusEnum
+    {
+        completed,
+        withdrawn
+    }
 }
