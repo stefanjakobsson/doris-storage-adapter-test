@@ -2,6 +2,6 @@
 
 namespace DatasetFileUpload.Services;
 
-public class AlreadyPublishedException : Exception
+public class DatasetStatusException : Exception
 {
 }

@@ -103,7 +103,6 @@ public class FileService(
 
         try
         {
-            await ThrowIfPublished(datasetVersion);
             await PublishVersionImpl(datasetVersion, openAccess, doi);
         }
         finally
@@ -207,7 +206,7 @@ public class FileService(
         {
             if (!await VersionIsPublished(datasetVersion))
             {
-                throw new Exception();
+                throw new DatasetStatusException();
             }
 
             await WithdrawVersionImpl(datasetVersion);
@@ -220,20 +219,27 @@ public class FileService(
 
     private async Task WithdrawVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
-        var bagItFileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
+        var bagInfoFileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
 
-        if (bagItFileData == null)
+        if (bagInfoFileData == null)
         {
+            // Do we need to throw an exception here?
             return;
         }
 
-        var bagInfo = await BagItInfo.Parse(bagItFileData.Stream);
+        var bagInfo = await BagItInfo.Parse(bagInfoFileData.Stream);
 
-        //bagInfo.Withdrawn = true;
+        bagInfo.DatasetStatus = BagItInfo.DatasetStatusEnum.withdrawn;
 
+        var bagInfoContents = bagInfo.Serialize();
 
+        var tagManifest = await LoadManifest(datasetVersion, false);
+        tagManifest.AddOrUpdateItem(new(bagInfoFileName, SHA256.HashData(bagInfoContents)));
+        await StoreManifest(datasetVersion, false, tagManifest);
+
+        await storageService.StoreFile(GetFullFilePath(datasetVersion, bagInfoFileName), 
+            new MemoryStream(bagInfoContents));
     }
-
 
     public async Task<RoCrateFile> Upload(
         DatasetVersionIdentifier datasetVersion,
@@ -607,7 +613,7 @@ public class FileService(
     {
         if (await VersionIsPublished(datasetVersion))
         {
-            throw new AlreadyPublishedException();
+            throw new DatasetStatusException();
         }
     }
 

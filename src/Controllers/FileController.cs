@@ -57,6 +57,24 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         return Ok();
     }
 
+    [HttpPut("{datasetIdentifier}/{versionNumber}/withdraw")]
+    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<IActionResult> WithdrawVersion(string datasetIdentifier, string versionNumber)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        try
+        {
+            await fileService.WithdrawVersion(datasetVersion);
+        }
+        catch (ConflictException)
+        {
+            return ConflictResult();
+        }
+
+        return Ok();
+    }
+
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     // Disable form value model binding to ensure that files are not buffered
