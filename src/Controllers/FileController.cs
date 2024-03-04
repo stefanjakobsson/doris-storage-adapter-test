@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
 using System.Collections.Generic;
+using System.IO.Compression;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -208,6 +210,37 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         catch (IllegalPathException)
         {
             return IllegalPathResult();
+        }
+    }
+
+    [HttpGet("/file/{datasetIdentifier}/{versionNumber}/zip")]
+    public async Task GetDataAsZip(string datasetIdentifier, string versionNumber, [FromQuery]string[] paths)
+    {
+        logger.LogDebug("GetDataAsZip datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, paths {paths}",
+            datasetIdentifier, versionNumber, paths);
+
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        Response.ContentType = "application/zip";
+        Response.Headers.ContentDisposition = "attachment; filename=" + datasetIdentifier + "-" + versionNumber + ".zip";
+
+        using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
+        await foreach (var file in fileService.ListFiles(datasetVersion))
+        {
+            if (paths.Length > 0 && !paths.Any(file.Id.StartsWith))
+            {
+                continue;
+            }
+
+            var fileData = await fileService.GetData(datasetVersion, file.Id.StartsWith("data/") ? FileType.Data : FileType.Documentation,
+                file.Id.StartsWith("data/") ? file.Id[5..] : file.Id[14..]);
+
+            if (fileData != null)
+            {
+                var entry = archive.CreateEntry(file.Id, CompressionLevel.NoCompression);
+                using var entryStream = entry.Open();
+                await fileData.Stream.CopyToAsync(entryStream);
+            }
         }
     }
 
