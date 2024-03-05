@@ -412,6 +412,10 @@ public class FileService(
         // Checksums and fetch can potentially be changed while processing this request,
         // leading to returning faulty checksums and other problems.
 
+        static string StripTypePrefix(string filePath) =>
+            IsDataFile(filePath) ? filePath["data/".Length..] : 
+            IsDocumentationFile(filePath) ? filePath["documentation/".Length..] : filePath;
+
         var payloadChecksums = await LoadManifest(datasetVersion, true);
         var tagChecksums = await LoadManifest(datasetVersion, false);
         var fetch = await LoadFetch(datasetVersion);
@@ -425,6 +429,7 @@ public class FileService(
         await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
         {
             file.Sha256 = GetChecksum(file.Id);
+            file.Id = StripTypePrefix(file.Id);
 
             yield return file;
         }
@@ -433,11 +438,75 @@ public class FileService(
         {
             yield return new()
             {
-                Id = file.FilePath,
+                Id = StripTypePrefix(file.FilePath),
                 ContentSize = file.Length == null ? 0 : file.Length.Value,
                 Sha256 = GetChecksum(file.FilePath)
             };
         }
+    }
+
+    public async IAsyncEnumerable<(FileType Type, string FilePath, Stream Data)> GetStreams(DatasetVersionIdentifier datasetVersion, string[] paths)
+    {
+        static string StripTypePrefix(string filePath) =>
+            IsDataFile(filePath) ? filePath["data/".Length..] :
+            IsDocumentationFile(filePath) ? filePath["documentation/".Length..] : filePath;
+
+        var payloadManifest = await LoadManifest(datasetVersion, true);
+        var tagManifest = await LoadManifest(datasetVersion, false);
+        var fetch = await LoadFetch(datasetVersion);
+
+
+        foreach (var filePath in 
+            payloadManifest.Items.Concat(tagManifest.Items).Select(i => i.FilePath))
+        {
+            if (paths.Length > 0 && !paths.Any(filePath.StartsWith))
+            {
+                continue;
+            }
+
+            string fullFilePath;
+            if (fetch.TryGetItem(filePath, out var fetchItem))
+            {
+                fullFilePath = GetDatasetPath(datasetVersion) + DecodeUrlEncodedPath(fetchItem.Url[2..]);
+            }
+            else
+            {
+                fullFilePath = GetFullFilePath(datasetVersion, filePath);
+            }
+
+            var data = await storageService.GetFileData(fullFilePath);
+
+            if (data != null)
+            {
+                yield return (GetFileType(filePath), StripTypePrefix(filePath), data.Stream);
+            }
+        }
+
+        /*await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
+        {
+            if (paths.Length > 0 && !paths.Any(file.Id.StartsWith))
+            {
+                continue;
+            }
+
+            string filePath;
+
+            if (fetch.TryGetItem(file.Id, out var fetchItem))
+            {
+                filePath = GetDatasetPath(datasetVersion) + DecodeUrlEncodedPath(fetchItem.Url[2..]);
+            }
+            else
+            {
+                filePath = GetFullFilePath(datasetVersion, file.Id);
+            }
+
+            var data = await storageService.GetFileData(filePath);
+
+            if (data != null)
+            {
+                yield return (file.AdditionalType, StripTypePrefix(file.Id), data.Stream);
+            }
+        }*/
     }
 
 
@@ -474,8 +543,11 @@ public class FileService(
     private static string GetManifestFilePath(DatasetVersionIdentifier datasetVersion, bool payload) =>
         GetFullFilePath(datasetVersion, GetManifestFileName(payload));
 
-    private static bool IsDataFile(string filePath) => filePath.StartsWith("data/");
-    private static bool IsDocumentationFile(string filePath) => filePath.StartsWith("documentation/");
+    private static bool IsDataFile(string filePath) => GetFileType(filePath) == FileType.Data;
+    private static bool IsDocumentationFile(string filePath) => GetFileType(filePath) == FileType.Documentation;
+
+    private static FileType GetFileType(string filePath) =>
+        filePath.StartsWith("data/") ? FileType.Data : FileType.Documentation;
 
     private static string GetFetchFilePath(DatasetVersionIdentifier datasetVersion) =>
         GetFullFilePath(datasetVersion, fetchFileName);
@@ -599,7 +671,20 @@ public class FileService(
         {
             file.Id = file.Id[(path.Length + 1)..];
 
-            if (IsDataFile(file.Id) || IsDocumentationFile(file.Id))
+            bool returnFile = false;
+
+            if (IsDataFile(file.Id))
+            {
+                file.AdditionalType = FileType.Data;
+                returnFile = true;
+            }
+            else if (IsDocumentationFile(file.Id))
+            {
+                file.AdditionalType = FileType.Documentation;
+                returnFile = true;
+            }
+
+            if (returnFile)
             {
                 yield return file;
             }

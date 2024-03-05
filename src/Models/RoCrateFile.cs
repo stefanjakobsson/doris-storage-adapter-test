@@ -7,7 +7,9 @@ public class RoCrateFile
 {
     [JsonPropertyName("@type")]
     public string RdfType => "File";
+    [JsonPropertyName("@id")]
     public string Id { get; set; } = "";
+    public FileType AdditionalType { get; set; }
     public long ContentSize { get; set; } = 0;
     public DateTime? DateCreated { get; set; }
     public DateTime? DateModified { get; set; }

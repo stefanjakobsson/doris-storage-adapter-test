@@ -214,10 +214,10 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/zip")]
-    public async Task GetDataAsZip(string datasetIdentifier, string versionNumber, [FromQuery]string[] paths)
+    public async Task GetDataAsZip(string datasetIdentifier, string versionNumber, [FromQuery]string[] path)
     {
-        logger.LogDebug("GetDataAsZip datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, paths {paths}",
-            datasetIdentifier, versionNumber, paths);
+        logger.LogDebug("GetDataAsZip datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, path {path}",
+            datasetIdentifier, versionNumber, path);
 
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -225,23 +225,32 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         Response.Headers.ContentDisposition = "attachment; filename=" + datasetIdentifier + "-" + versionNumber + ".zip";
 
         using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
-        await foreach (var file in fileService.ListFiles(datasetVersion))
+
+        await foreach (var (type, filePath, data) in fileService.GetStreams(datasetVersion, path))
         {
-            if (paths.Length > 0 && !paths.Any(file.Id.StartsWith))
+            var entry = archive.CreateEntry(type.ToString().ToLower() + '/' + filePath, CompressionLevel.NoCompression);
+            using var entryStream = entry.Open();
+            await data.CopyToAsync(entryStream);
+        }
+
+        /*await foreach (var file in fileService.ListFiles(datasetVersion))
+        {
+            string filePath = file.AdditionalType.ToString().ToLowerInvariant() + '/' + file.Id;
+
+            if (path.Length > 0 && !path.Any(filePath.StartsWith))
             {
                 continue;
             }
 
-            var fileData = await fileService.GetData(datasetVersion, file.Id.StartsWith("data/") ? FileType.Data : FileType.Documentation,
-                file.Id.StartsWith("data/") ? file.Id[5..] : file.Id[14..]);
+            var fileData = await fileService.GetData(datasetVersion, file.AdditionalType, file.Id);
 
             if (fileData != null)
             {
-                var entry = archive.CreateEntry(file.Id, CompressionLevel.NoCompression);
+                var entry = archive.CreateEntry(filePath, CompressionLevel.NoCompression);
                 using var entryStream = entry.Open();
                 await fileData.Stream.CopyToAsync(entryStream);
             }
-        }
+        }*/
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}")]
