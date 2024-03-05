@@ -226,7 +226,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
 
         using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
 
-        await foreach (var (type, filePath, data) in fileService.GetStreams(datasetVersion, path))
+        await foreach (var (type, filePath, data) in fileService.GetMultipleData(datasetVersion, path))
         {
             var entry = archive.CreateEntry(type.ToString().ToLower() + '/' + filePath, CompressionLevel.NoCompression);
             using var entryStream = entry.Open();
