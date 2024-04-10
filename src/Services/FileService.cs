@@ -53,7 +53,7 @@ public class FileService(
             var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, payload));
             if (fileData != null)
             {
-                await storageService.StoreFile(GetManifestFilePath(toVersion, payload), fileData.Stream);
+                await storageService.StoreFile(GetManifestFilePath(toVersion, payload), fileData);
             }
         }
 
@@ -114,7 +114,7 @@ public class FileService(
     private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
     {
         Task WriteBytes(string filePath, byte[] data) =>
-            storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), new MemoryStream(data));
+            storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), CreateStreamFromByteArray(data));
 
         async Task<(T, byte[] Checksum)?> LoadWithChecksum<T>(string filePath, Func<Stream, Task<T>> func)
         {
@@ -238,14 +238,14 @@ public class FileService(
         await StoreManifest(datasetVersion, false, tagManifest);
 
         await storageService.StoreFile(GetFullFilePath(datasetVersion, bagInfoFileName),
-            new MemoryStream(bagInfoContents));
+            CreateStreamFromByteArray(bagInfoContents));
     }
 
     public async Task<RoCrateFile> Upload(
         DatasetVersionIdentifier datasetVersion,
         FileType type,
         string filePath,
-        Stream data)
+        StreamWithLength data)
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
@@ -269,7 +269,7 @@ public class FileService(
         DatasetVersionIdentifier datasetVersion,
         FileType type,
         string filePath,
-        Stream data)
+        StreamWithLength data)
     {
         async Task<string?> Deduplicate(byte[] checksum)
         {
@@ -307,7 +307,7 @@ public class FileService(
         string fullFilePath = GetFullFilePath(datasetVersion, filePath);
 
         using var sha256 = SHA256.Create();
-        var hashStream = new CryptoStream(data, sha256, CryptoStreamMode.Read);
+        var hashStream = new CryptoStream(data.Stream, sha256, CryptoStreamMode.Read);
 
         long bytesRead = 0;
         var monitoringStream = new MonitoringStream(hashStream);
@@ -316,7 +316,7 @@ public class FileService(
             bytesRead += e.Count;
         };
 
-        var result = await storageService.StoreFile(fullFilePath, monitoringStream);
+        var result = await storageService.StoreFile(fullFilePath, new(monitoringStream, data.Length));
 
         byte[] checksum = sha256.Hash!;
 
@@ -646,7 +646,7 @@ public class FileService(
 
         if (manifest.Items.Any())
         {
-            return storageService.StoreFile(filePath, new MemoryStream(manifest.Serialize()));
+            return storageService.StoreFile(filePath, CreateStreamFromByteArray(manifest.Serialize()));
         }
 
         return storageService.DeleteFile(filePath);
@@ -658,7 +658,7 @@ public class FileService(
 
         if (fetch.Items.Any())
         {
-            return storageService.StoreFile(filePath, new MemoryStream(fetch.Serialize()));
+            return storageService.StoreFile(filePath, CreateStreamFromByteArray(fetch.Serialize()));
         }
 
         return storageService.DeleteFile(filePath);
@@ -689,6 +689,8 @@ public class FileService(
             }
         }
     }
+
+    private static StreamWithLength CreateStreamFromByteArray(byte[] data) => new(new MemoryStream(data), data.LongLength);
 
     private Task<bool> VersionIsPublished(DatasetVersionIdentifier datasetVersion) =>
         storageService.FileExists(GetFullFilePath(datasetVersion, bagItFileName));

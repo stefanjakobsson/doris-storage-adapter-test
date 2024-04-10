@@ -7,7 +7,7 @@ namespace DatasetFileUpload.Services.Storage;
 
 public interface IStorageService
 {
-    Task<RoCrateFile> StoreFile(string filePath, Stream stream);
+    Task<RoCrateFile> StoreFile(string filePath, StreamWithLength data);
 
     Task DeleteFile(string filePath);
 

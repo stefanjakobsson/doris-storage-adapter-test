@@ -16,7 +16,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
   
-    public async Task<RoCrateFile> StoreFile(string filePath, Stream data)
+    public async Task<RoCrateFile> StoreFile(string filePath, StreamWithLength data)
     {
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
@@ -30,7 +30,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
 
         using (var stream = new FileStream(tempFile, FileMode.Create))
         {
-            await data.CopyToAsync(stream);
+            await data.Stream.CopyToAsync(stream);
         }
 
         if (!Directory.Exists(directoryPath))

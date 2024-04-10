@@ -10,10 +10,10 @@ internal class InMemoryStorageService : IStorageService
 {
     private readonly Dictionary<string, InMemoryFile> files = [];
 
-    public async Task<RoCrateFile> StoreFile(string filePath, Stream stream)
+    public async Task<RoCrateFile> StoreFile(string filePath, StreamWithLength data)
     {
         using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
+        await data.Stream.CopyToAsync(memoryStream);
 
         var file = new InMemoryFile(DateTime.UtcNow, DateTime.UtcNow, memoryStream.ToArray());
         files[filePath] = file;

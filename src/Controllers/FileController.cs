@@ -85,7 +85,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         return Ok();
     }
 
-    [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    /*[HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     // Disable form value model binding to ensure that files are not buffered
     [DisableFormValueModelBinding]
@@ -149,6 +149,49 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         }
 
         return Problem("No file posted.", statusCode: 400);
+    }*/
+
+    [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    // Disable request size limit to allow streaming large files
+    [DisableRequestSizeLimit]
+    public async Task<ActionResult<RoCrateFile>> Upload(
+        string datasetIdentifier, 
+        string versionNumber,
+        FileType type, 
+        [FromQuery] string filePath)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        if (!CheckClaims(datasetVersion))
+        {
+            return Forbid();
+        }
+
+        if (Request.Headers.ContentLength == null)
+        {
+            return Problem("Missing Content-Length.", statusCode: 400);
+        }
+
+        logger.LogDebug("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, type: {type}, filePath: {filePath}",
+                  datasetIdentifier, versionNumber, type, filePath);
+
+        try
+        {
+            return await fileService.Upload(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
+        }
+        catch (IllegalPathException)
+        {
+            return IllegalPathResult();
+        }
+        catch (ConflictException)
+        {
+            return ConflictResult();
+        }
+        catch (DatasetStatusException)
+        {
+            return StatusMismatchResult();
+        }
     }
 
 
