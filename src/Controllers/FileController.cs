@@ -1,17 +1,12 @@
-using DatasetFileUpload.Controllers.Filters;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Storage;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
-using Microsoft.Net.Http.Headers;
 using System.Collections.Generic;
 using System.IO.Compression;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -24,7 +19,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     private readonly FileService fileService = fileService;
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "UploadService")]
     public async Task<IActionResult> SetupVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -46,7 +41,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "UploadService")]
     public async Task<IActionResult> PublishVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -64,7 +59,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/withdraw")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "UploadService")]
     public async Task<IActionResult> WithdrawVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -86,7 +81,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     /*[HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "User")]
     // Disable form value model binding to ensure that files are not buffered
     [DisableFormValueModelBinding]
     // Disable request size limit to allow streaming large files
@@ -152,7 +147,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }*/
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "User")]
     // Disable request size limit to allow streaming large files
     [DisableRequestSizeLimit]
     public async Task<ActionResult<RoCrateFile>> Upload(
@@ -196,7 +191,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [Authorize(Roles = "User", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "User")]
     public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, FileType type, string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -269,11 +264,11 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
 
         using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
 
-        await foreach (var (type, filePath, data) in fileService.GetMultipleData(datasetVersion, path))
+        await foreach (var (type, filePath, data) in fileService.GetDataByPaths(datasetVersion, path))
         {
             var entry = archive.CreateEntry(type.ToString().ToLower() + '/' + filePath, CompressionLevel.NoCompression);
             using var entryStream = entry.Open();
-            await data.CopyToAsync(entryStream);
+            await data.Stream.CopyToAsync(entryStream);
         }
 
         /*await foreach (var file in fileService.ListFiles(datasetVersion))
@@ -297,7 +292,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "UploadService")]
     public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
     {
         logger.LogDebug("ListFiles datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}",

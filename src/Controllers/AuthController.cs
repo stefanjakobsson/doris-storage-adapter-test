@@ -1,6 +1,5 @@
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services.Auth;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -17,7 +16,7 @@ public class AuthController(ILogger<AuthController> logger, IConfiguration confi
     private readonly TokenService tokenService = new(configuration);
 
     [HttpPost("token/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = "UploadService", AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Roles = "UploadService")]
     public string GetUploadToken(string datasetIdentifier, string versionNumber, [FromBody] AuthInfo user)
     {
         return tokenService.GetUploadToken(user, new DatasetVersionIdentifier(datasetIdentifier, versionNumber));

@@ -429,7 +429,8 @@ public class FileService(
         }
     }
 
-    public async IAsyncEnumerable<(FileType Type, string FilePath, Stream Data)> GetMultipleData(
+    // Change return type to class/record? Reuse return type from ListFiles?
+    public async IAsyncEnumerable<(FileType Type, string FilePath, StreamWithLength Data)> GetDataByPaths(
         DatasetVersionIdentifier datasetVersion, string[] paths)
     {
         var payloadManifest = await LoadManifest(datasetVersion, true);
@@ -450,9 +451,11 @@ public class FileService(
 
             if (data != null && TryGetFileType(filePath, out var type))
             {
-                yield return (type, StripFileTypePrefix(filePath), data.Stream);
+                yield return (type, StripFileTypePrefix(filePath), data);
             }
         }
+
+
 
         /*await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
         {

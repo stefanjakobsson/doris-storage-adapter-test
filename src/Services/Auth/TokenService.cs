@@ -17,7 +17,7 @@ public class TokenService(IConfiguration configuration)
     {
         var claims = new List<Claim>
         {
-            new(ClaimTypes.Role, "User"),
+            new("role", "User"),
             new("DatasetIdentifier", datasetVersion.DatasetIdentifier),
             new("VersionNumber", datasetVersion.VersionNumber)
         };
@@ -39,7 +39,7 @@ public class TokenService(IConfiguration configuration)
     {
         var claims = new List<Claim>
         {
-            new(ClaimTypes.Role, "UploadService")
+            new("role", "UploadService")
         };
 
         var key = new SymmetricSecurityKey(
