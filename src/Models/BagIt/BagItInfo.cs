@@ -24,11 +24,15 @@ public class BagItInfo
     private const string accessRightLabel = "Access-Right";
     private const string datasetStatusLabel = "Dataset-Status";
 
-    private const string publicAccessRightValue = "http://publications.europa.eu/resource/authority/access-right/PUBLIC";
-    private const string nonPublicAccessRightValue = "http://publications.europa.eu/resource/authority/access-right/NON_PUBLIC";
+    // http://publications.europa.eu/resource/authority/access-right/PUBLIC
+    private const string publicAccessRightValue = "PUBLIC";
+    // http://publications.europa.eu/resource/authority/access-right/NON_PUBLIC
+    private const string nonPublicAccessRightValue = "NON_PUBLIC";
 
-    private const string completedDatasetStatusValue = "http://publications.europa.eu/resource/authority/dataset-status/COMPLETED";
-    private const string withdrawnDatasetStatusValue = "http://publications.europa.eu/resource/authority/dataset-status/WITHDRAWN";
+    // http://publications.europa.eu/resource/authority/dataset-status/COMPLETED
+    private const string completedDatasetStatusValue = "COMPLETED";
+    // http://publications.europa.eu/resource/authority/dataset-status/WITHDRAWN
+    private const string withdrawnDatasetStatusValue = "WITHDRAWN";
 
     public DateTime? BaggingDate
     {
