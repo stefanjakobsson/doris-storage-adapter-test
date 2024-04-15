@@ -1,3 +1,4 @@
+using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Storage;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.IO.Compression;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -19,9 +21,9 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     private readonly FileService fileService = fileService;
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = "UploadService")]
+    [Authorize(Scope.service)]
     public async Task<IActionResult> SetupVersion(string datasetIdentifier, string versionNumber)
-    {
+    {  
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
         try
@@ -41,7 +43,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
-    [Authorize(Roles = "UploadService")]
+    [Authorize(Scope.service)]
     public async Task<IActionResult> PublishVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -59,7 +61,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/withdraw")]
-    [Authorize(Roles = "UploadService")]
+    [Authorize(Scope.service)]
     public async Task<IActionResult> WithdrawVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -147,7 +149,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }*/
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [Authorize(Roles = "User")]
+    [Authorize(Scope.writeData)]
     // Disable request size limit to allow streaming large files
     [DisableRequestSizeLimit]
     public async Task<ActionResult<RoCrateFile>> Upload(
@@ -191,7 +193,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [Authorize(Roles = "User")]
+    [Authorize(Scope.writeData)]
     public async Task<IActionResult> Delete(string datasetIdentifier, string versionNumber, FileType type, string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -225,6 +227,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [Authorize(Scope.readData)]
     public async Task<IActionResult> GetData(string datasetIdentifier, string versionNumber, FileType type, string filePath)
     {
         logger.LogDebug("GetData datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, type: {type}, filePath: {filePath}",
@@ -252,6 +255,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/zip")]
+    [Authorize(Scope.readData)]
     public async Task GetDataAsZip(string datasetIdentifier, string versionNumber, [FromQuery]string[] path)
     {
         logger.LogDebug("GetDataAsZip datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, path {path}",
@@ -292,7 +296,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = "UploadService")]
+    [Authorize(Scope.service)]
     public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
     {
         logger.LogDebug("ListFiles datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}",
@@ -307,9 +311,8 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     }
 
     private bool CheckClaims(DatasetVersionIdentifier datasetVersion) =>
-        HttpContext.User.Identity is ClaimsIdentity identity &&
-        identity.FindFirst("DatasetIdentifier")?.Value == datasetVersion.DatasetIdentifier &&
-        identity.FindFirst("VersionNumber")?.Value == datasetVersion.VersionNumber;
+        User.Claims.Any(c => c.Type == Claims.DatasetIdentifier && c.Value == datasetVersion.DatasetIdentifier) &&
+        User.Claims.Any(c => c.Type == Claims.DatasetVersionNumber && c.Value == datasetVersion.VersionNumber);
 
     private ObjectResult IllegalPathResult() =>
         Problem("Illegal path.", statusCode: 400);

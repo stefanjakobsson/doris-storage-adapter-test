@@ -1,3 +1,4 @@
+using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Auth;
 using DatasetFileUpload.Services.Lock;
@@ -5,6 +6,7 @@ using DatasetFileUpload.Services.Storage;
 using DatasetFileUpload.Services.Storage.Disk;
 using DatasetFileUpload.Services.Storage.InMemory;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -62,7 +64,15 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     }
 );
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder().AddPolicy(
+        Scope.service,
+        builder => builder.RequireScope(Scope.service))
+    .AddPolicy(
+        Scope.readData,
+        builder => builder.RequireScope(Scope.readData))
+    .AddPolicy(
+        Scope.writeData,
+        builder => builder.RequireScope(Scope.writeData));
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
 builder.Services.AddTransient<FileService>();
