@@ -1,17 +1,20 @@
+using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Services;
-using DatasetFileUpload.Services.Auth;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using DatasetFileUpload.Services.Storage.Disk;
-using DatasetFileUpload.Services.Storage.InMemory;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using NetDevPack.Security.Jwt.Core.Interfaces;
+using NetDevPack.Security.JwtExtensions;
 using System;
-using System.Text;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
+using System.Security.Claims;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,15 +23,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers().AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 //builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options => {
+builder.Services.AddSwaggerGen(options =>
+{
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-        {
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Name = "JWT Authentication",
-            Type = SecuritySchemeType.Http,
-            Scheme = JwtBearerDefaults.AuthenticationScheme
-        }
+    {
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Name = "JWT Authentication",
+        Type = SecuritySchemeType.Http,
+        Scheme = JwtBearerDefaults.AuthenticationScheme
+    }
     );
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -46,23 +50,15 @@ builder.Services.AddSwaggerGen(options => {
     });
 });
 
-builder.Services.AddAuthentication().AddJwtBearer(options =>
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuerSigningKey = true,
-        ValidateAudience = false,
-        ValidateIssuer = false,
-        ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero,
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(
-                builder.Configuration.GetSection("AppSettings:SigningKey").Value!
-            )
-        )
-    }
-);
+builder.Services.AddMemoryCache(); // Needed for AddJwksManager()
+builder.Services.AddJwksManager().PersistKeysInMemory();
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthentication().AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = true;
+    options.SaveToken = true;
+    options.SetJwksOptions(new JwkOptions("https://localhost:7065/jwks", audience: "upload"));
+});
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
 builder.Services.AddTransient<FileService>();
@@ -93,14 +89,35 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Generate service token and print it to the terminal (for testing purposes)
-if(app.Environment.IsDevelopment())
-{
-    TokenService tokenService = new(builder.Configuration);
-    Console.WriteLine("ServiceToken:");
-    Console.WriteLine(tokenService.GetServiceToken());
-    Console.WriteLine("");
-}
+app.UseJwksDiscovery();
 
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var jwtService = scope.ServiceProvider.GetService<IJwtService>()!;   
+    var key = await jwtService.GetCurrentSigningCredentials();
+
+    string CreateToken(params string[] roles)
+    {
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = "https://localhost:7065",
+            Audience = "upload",
+            Subject = new(roles.Select(r => new Claim("role", r))),
+            Expires = DateTime.UtcNow.AddHours(12),
+            SigningCredentials = key
+        });
+
+        return tokenHandler.WriteToken(token);
+    }
+
+    Console.WriteLine("Service token:");
+    Console.WriteLine(CreateToken(Roles.Service));
+    Console.WriteLine();
+    Console.WriteLine("User token:");
+    Console.WriteLine(CreateToken(Roles.ReadData, Roles.WriteData));
+    Console.WriteLine();
+}
 
 app.Run();
