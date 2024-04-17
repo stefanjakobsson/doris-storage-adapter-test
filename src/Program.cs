@@ -20,9 +20,9 @@ using System.Text.Json.Serialization;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers().AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddControllers().AddJsonOptions(options => 
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-//builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -50,14 +50,21 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddMemoryCache(); // Needed for AddJwksManager()
-builder.Services.AddJwksManager().PersistKeysInMemory();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddMemoryCache(); // Needed for AddJwksManager()
+    builder.Services.AddJwksManager().PersistKeysInMemory();
+}
 
 builder.Services.AddAuthentication().AddJwtBearer(options =>
 {
     options.RequireHttpsMetadata = true;
     options.SaveToken = true;
-    options.SetJwksOptions(new JwkOptions("https://localhost:7065/jwks", audience: "upload"));
+    options.SetJwksOptions(
+        new(
+            jwksUri: builder.Configuration["Security:JwksUri"], 
+            audience: builder.Configuration["PublicUrl"]));
+
     // Limiting the valid algorithms to only the one used by Doris hardens security by
     // making algorithm confusion attacks impossible, but also means that it's harder
     // for SND to change the signing algorithm.
@@ -93,10 +100,10 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.UseJwksDiscovery();
-
 if (app.Environment.IsDevelopment())
 {
+    app.UseJwksDiscovery();
+
     using var scope = app.Services.CreateScope();
     var jwtService = scope.ServiceProvider.GetService<IJwtService>()!;   
     var key = await jwtService.GetCurrentSigningCredentials();
@@ -106,8 +113,8 @@ if (app.Environment.IsDevelopment())
         var tokenHandler = new JwtSecurityTokenHandler();
         var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = "https://localhost:7065",
-            Audience = "upload",
+            Issuer = builder.Configuration["PublicUrl"],
+            Audience = builder.Configuration["PublicUrl"],
             Subject = new(roles.Select(r => new Claim("role", r))),
             Expires = DateTime.UtcNow.AddHours(12),
             SigningCredentials = key
