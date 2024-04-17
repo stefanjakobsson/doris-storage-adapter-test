@@ -58,6 +58,10 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     options.RequireHttpsMetadata = true;
     options.SaveToken = true;
     options.SetJwksOptions(new JwkOptions("https://localhost:7065/jwks", audience: "upload"));
+    // Limiting the valid algorithms to only the one used by Doris hardens security by
+    // making algorithm confusion attacks impossible, but also means that it's harder
+    // for SND to change the signing algorithm.
+    options.TokenValidationParameters.ValidAlgorithms = ["PS256"];
 });
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
@@ -114,10 +118,6 @@ if (app.Environment.IsDevelopment())
 
     Console.WriteLine("Service token:");
     Console.WriteLine(CreateToken(Roles.Service));
-    Console.WriteLine();
-    Console.WriteLine("User token:");
-    Console.WriteLine(CreateToken(Roles.ReadData, Roles.WriteData));
-    Console.WriteLine();
 }
 
 app.Run();
