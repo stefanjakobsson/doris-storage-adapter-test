@@ -1,10 +1,12 @@
 using DatasetFileUpload.Authorization;
+using DatasetFileUpload.Configuration;
 using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using DatasetFileUpload.Services.Storage.Disk;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
@@ -19,7 +21,14 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.Services.AddOptionsWithValidateOnStart<FileSystemStorageServiceConfiguration>()
+    .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptionsWithValidateOnStart<GeneralConfiguration>()
+    .Bind(builder.Configuration)
+    .ValidateDataAnnotations();
+
 builder.Services.AddControllers().AddJsonOptions(options => 
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -56,14 +65,17 @@ if (builder.Environment.IsDevelopment())
     builder.Services.AddJwksManager().PersistKeysInMemory();
 }
 
+var generalConfiguration = builder.Configuration.Get<GeneralConfiguration>()!;
+
 builder.Services.AddAuthentication().AddJwtBearer(options =>
 {
     options.RequireHttpsMetadata = true;
     options.SaveToken = true;
     options.SetJwksOptions(
         new(
-            jwksUri: builder.Configuration["Security:JwksUri"], 
-            audience: builder.Configuration["PublicUrl"]));
+            jwksUri: generalConfiguration.JwksUri, 
+            audience: generalConfiguration.PublicUrl
+        ));
 
     // Limiting the valid algorithms to only the one used by Doris hardens security by
     // making algorithm confusion attacks impossible, but also means that it's harder
@@ -77,16 +89,10 @@ builder.Services.AddTransient<FileService>();
 //builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
 builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
 
-builder.Services.AddOptions<FileSystemStorageServiceConfiguration>()
-    .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
 var app = builder.Build();
 
 app.UseExceptionHandler("/error");
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -113,8 +119,8 @@ if (app.Environment.IsDevelopment())
         var tokenHandler = new JwtSecurityTokenHandler();
         var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = builder.Configuration["PublicUrl"],
-            Audience = builder.Configuration["PublicUrl"],
+            Issuer = generalConfiguration.PublicUrl,
+            Audience = generalConfiguration.PublicUrl,
             Subject = new(roles.Select(r => new Claim("role", r))),
             Expires = DateTime.UtcNow.AddHours(12),
             SigningCredentials = key
