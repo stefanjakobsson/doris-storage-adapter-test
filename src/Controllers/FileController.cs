@@ -207,9 +207,4 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     private bool CheckDatasetVersionClaims(DatasetVersionIdentifier datasetVersion) =>
         User.Claims.Any(c => c.Type == Claims.DatasetIdentifier && c.Value == datasetVersion.DatasetIdentifier) &&
         User.Claims.Any(c => c.Type == Claims.DatasetVersionNumber && c.Value == datasetVersion.VersionNumber);
-
-    [ApiExplorerSettings(IgnoreApi = true)]
-    [Route("/error")]
-    public IActionResult HandleError() =>
-        Problem();
 }

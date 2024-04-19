@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace DatasetFileUpload.Services;
+﻿namespace DatasetFileUpload.Services.Exceptions;
 
 internal class DatasetStatusException : ApiException
 {

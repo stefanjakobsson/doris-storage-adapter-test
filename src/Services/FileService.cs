@@ -1,6 +1,7 @@
 ﻿using ByteSizeLib;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Models.BagIt;
+using DatasetFileUpload.Services.Exceptions;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using Nerdbank.Streams;

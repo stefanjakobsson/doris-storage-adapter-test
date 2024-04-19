@@ -1,6 +1,7 @@
 using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Configuration;
 using DatasetFileUpload.Services;
+using DatasetFileUpload.Services.Exceptions;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
 using DatasetFileUpload.Services.Storage.Disk;
@@ -32,7 +33,6 @@ builder.Services.AddOptionsWithValidateOnStart<GeneralConfiguration>()
 
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-
 
 builder.Services.AddProblemDetails(options =>
 {
@@ -107,7 +107,7 @@ builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
 
 var app = builder.Build();
 
-app.UseExceptionHandler("/error");
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

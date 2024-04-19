@@ -1,4 +1,4 @@
-﻿namespace DatasetFileUpload.Services.Storage;
+﻿namespace DatasetFileUpload.Services.Exceptions;
 
 internal class IllegalPathException(string path) : ApiException("Illegal path.")
 {

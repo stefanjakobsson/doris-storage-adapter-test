@@ -1,4 +1,5 @@
 using DatasetFileUpload.Models;
+using DatasetFileUpload.Services.Exceptions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -14,7 +15,6 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
 
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
-
   
     public async Task<RoCrateFile> StoreFile(string filePath, StreamWithLength data)
     {
