@@ -144,7 +144,7 @@ public class BagItInfo
     {
         var result = new BagItInfo();
 
-        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var reader = new StreamReader(stream, Encoding.UTF8);
         string? line;
         string value = "";
         string label = "";

@@ -51,7 +51,7 @@ public class FileService(
     {
         async Task CopyManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion, bool payload)
         {
-            var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, payload));
+            using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, payload));
             if (fileData != null)
             {
                 await storageService.StoreFile(GetManifestFilePath(toVersion, payload), fileData);
@@ -119,7 +119,7 @@ public class FileService(
 
         async Task<(T, byte[] Checksum)?> LoadWithChecksum<T>(string filePath, Func<Stream, Task<T>> func)
         {
-            var fileData = await storageService.GetFileData(filePath);
+            using var fileData = await storageService.GetFileData(filePath);
 
             if (fileData == null)
             {
@@ -127,7 +127,7 @@ public class FileService(
             }
 
             using var sha256 = SHA256.Create();
-            var hashStream = new CryptoStream(fileData.Stream, sha256, CryptoStreamMode.Read);
+            using var hashStream = new CryptoStream(fileData.Stream, sha256, CryptoStreamMode.Read);
 
             return (await func(hashStream), sha256.Hash!);
         }
@@ -220,7 +220,7 @@ public class FileService(
 
     private async Task WithdrawVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
-        var bagInfoFileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
+        using var bagInfoFileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
 
         if (bagInfoFileData == null)
         {
@@ -438,7 +438,6 @@ public class FileService(
         var tagManifest = await LoadManifest(datasetVersion, false);
         var fetch = await LoadFetch(datasetVersion);
 
-
         foreach (var filePath in
             payloadManifest.Items.Concat(tagManifest.Items).Select(i => i.FilePath))
         {
@@ -455,8 +454,6 @@ public class FileService(
                 yield return (type, StripFileTypePrefix(filePath), data);
             }
         }
-
-
 
         /*await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
         {
@@ -565,7 +562,7 @@ public class FileService(
 
     private async Task<BagItManifest> LoadManifest(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
-        var fileData = await storageService.GetFileData(GetManifestFilePath(datasetVersion, payloadManifest));
+        using var fileData = await storageService.GetFileData(GetManifestFilePath(datasetVersion, payloadManifest));
 
         if (fileData == null)
         {
@@ -577,7 +574,7 @@ public class FileService(
 
     private async Task<BagItFetch> LoadFetch(DatasetVersionIdentifier datasetVersion)
     {
-        var fileData = await storageService.GetFileData(GetFetchFilePath(datasetVersion));
+        using var fileData = await storageService.GetFileData(GetFetchFilePath(datasetVersion));
 
         if (fileData == null)
         {
@@ -696,8 +693,12 @@ public class FileService(
 
     private static StreamWithLength CreateStreamFromByteArray(byte[] data) => new(new MemoryStream(data), data.LongLength);
 
-    private Task<bool> VersionIsPublished(DatasetVersionIdentifier datasetVersion) =>
-        storageService.FileExists(GetFullFilePath(datasetVersion, bagItFileName));
+    private async Task<bool> VersionIsPublished(DatasetVersionIdentifier datasetVersion)
+    {
+        using var data = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagItFileName));
+
+        return data != null;
+    }
 
     private async Task ThrowIfPublished(DatasetVersionIdentifier datasetVersion)
     {

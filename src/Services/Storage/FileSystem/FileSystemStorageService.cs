@@ -81,13 +81,6 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         return Task.CompletedTask;
     }
 
-    public Task<bool> FileExists(string filePath)
-    {
-        filePath = GetPathOrThrow(filePath, basePath);
-
-        return Task.FromResult(File.Exists(filePath));
-    }
-
     public Task<StreamWithLength?> GetFileData(string filePath)
     {
         filePath = GetPathOrThrow(filePath, basePath);

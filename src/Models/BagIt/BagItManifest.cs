@@ -16,7 +16,7 @@ public class BagItManifest
     {
         var result = new BagItManifest();
 
-        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var reader = new StreamReader(stream, Encoding.UTF8);
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {

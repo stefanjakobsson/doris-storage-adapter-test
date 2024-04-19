@@ -11,8 +11,6 @@ public interface IStorageService
 
     Task DeleteFile(string filePath);
 
-    Task<bool> FileExists(string filePath);
-
     Task<StreamWithLength?> GetFileData(string filePath);
 
     IAsyncEnumerable<RoCrateFile> ListFiles(string path);

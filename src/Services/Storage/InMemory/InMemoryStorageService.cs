@@ -27,11 +27,6 @@ internal class InMemoryStorageService : IStorageService
         return Task.CompletedTask;
     }
 
-    public Task<bool> FileExists(string filePath)
-    {
-        return Task.FromResult(files.ContainsKey(filePath));
-    }
-
     public Task<StreamWithLength?> GetFileData(string filePath)
     {
         if (files.TryGetValue(filePath, out var file))

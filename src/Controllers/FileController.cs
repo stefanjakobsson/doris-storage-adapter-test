@@ -164,7 +164,8 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         {
             var entry = archive.CreateEntry(type.ToString().ToLower() + '/' + filePath, CompressionLevel.NoCompression);
             using var entryStream = entry.Open();
-            await data.Stream.CopyToAsync(entryStream);
+            using var dataStream = data.Stream;
+            await dataStream.CopyToAsync(entryStream);
         }
 
         return TypedResults.Ok();
