@@ -49,12 +49,29 @@ public class FileService(
 
     private async Task SetupVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
-        async Task CopyManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion, bool payload)
+        async Task CopyPayloadManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion)
         {
-            using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, payload));
+            using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, true));
             if (fileData != null)
             {
-                await storageService.StoreFile(GetManifestFilePath(toVersion, payload), fileData);
+                await storageService.StoreFile(GetManifestFilePath(toVersion, true), fileData);
+            }
+        }
+
+        async Task CopyTagManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion)
+        {
+            using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, false));
+            if (fileData != null)
+            {
+                var sourceManifest = await BagItManifest.Parse(fileData.Stream);
+                var newManifest = new BagItManifest();
+
+                foreach (var item in sourceManifest.Items.Where(i => IsDocumentationFile(i.FilePath)))
+                {
+                    newManifest.AddOrUpdateItem(item);
+                }
+
+                await StoreManifest(toVersion, false, newManifest);
             }
         }
 
@@ -74,8 +91,8 @@ public class FileService(
         var fetch = await LoadFetch(previousVersion);
         var newFetch = new BagItFetch();
 
-        await CopyManifest(previousVersion, datasetVersion, true);
-        await CopyManifest(previousVersion, datasetVersion, false);
+        await CopyPayloadManifest(previousVersion, datasetVersion);
+        await CopyTagManifest(previousVersion, datasetVersion);
 
         string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
 
@@ -220,15 +237,25 @@ public class FileService(
 
     private async Task WithdrawVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
-        using var bagInfoFileData = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
+        async Task<BagItInfo?> LoadBagInfo()
+        {
+            using var data = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
 
-        if (bagInfoFileData == null)
+            if (data == null)
+            {
+                return null;
+            }
+
+            return await BagItInfo.Parse(data.Stream);
+        }
+
+        var bagInfo = await LoadBagInfo();
+
+        if (bagInfo == null)
         {
             // Do we need to throw an exception here?
             return;
         }
-
-        var bagInfo = await BagItInfo.Parse(bagInfoFileData.Stream);
 
         bagInfo.DatasetStatus = DatasetStatusEnum.withdrawn;
 
@@ -535,6 +562,8 @@ public class FileService(
     }
 
     private static bool IsDataFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.Data;
+
+    private static bool IsDocumentationFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.Documentation;
 
     private static string StripFileTypePrefix(string filePath)
     {
