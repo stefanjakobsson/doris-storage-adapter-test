@@ -84,14 +84,14 @@ public class BagItInfo
         get => GetValue(accessRightLabel, v => v switch
         {
             publicAccessRightValue => AccessRightEnum.@public,
-            nonPublicAccessRightValue => AccessRightEnum.nonPublic,
+            nonPublicAccessRightValue => AccessRightEnum.non_public,
             _ => (AccessRightEnum?)null
         });
 
         set => SetOrRemoveItem(accessRightLabel, value switch
         {
             AccessRightEnum.@public => publicAccessRightValue,
-            AccessRightEnum.nonPublic => nonPublicAccessRightValue,
+            AccessRightEnum.non_public => nonPublicAccessRightValue,
             _ => null
         });
     }
@@ -188,16 +188,4 @@ public class BagItInfo
     }
 
     public record PayloadOxumType(long OctetCount, long StreamCount);
-
-    public enum AccessRightEnum
-    { 
-        @public, 
-        nonPublic
-    };
-
-    public enum DatasetStatusEnum
-    {
-        completed,
-        withdrawn
-    }
 }

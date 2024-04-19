@@ -1,7 +1,6 @@
 using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
-using DatasetFileUpload.Services.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -23,39 +22,26 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     [HttpPut("file/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
     public async Task<Results<Ok, ProblemHttpResult>> SetupVersion(string datasetIdentifier, string versionNumber)
-    {  
+    {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        try
-        {
-            await fileService.SetupVersion(datasetVersion);
-        }
-        catch (ConflictException)
-        {
-            return ConflictResult();
-        }
-        catch (DatasetStatusException)
-        {
-            return StatusMismatchResult();
-        }
+        await fileService.SetupVersion(datasetVersion);
 
         return TypedResults.Ok();
     }
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
     [Authorize(Roles = Roles.Service)]
-    public async Task<Results<Ok, ProblemHttpResult>> PublishVersion(string datasetIdentifier, string versionNumber)
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<Results<Ok, ProblemHttpResult>> PublishVersion(
+        string datasetIdentifier,
+        string versionNumber,
+        [FromForm] AccessRightEnum access_right,
+        [FromForm] string doi)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        try
-        {
-            await fileService.PublishVersion(datasetVersion, true, "test");
-        }
-        catch (ConflictException)
-        {
-            return ConflictResult();
-        }
+        await fileService.PublishVersion(datasetVersion, access_right, doi);
 
         return TypedResults.Ok();
     }
@@ -66,30 +52,21 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        try
-        {
-            await fileService.WithdrawVersion(datasetVersion);
-        }
-        catch (ConflictException)
-        {
-            return ConflictResult();
-        }
-        catch (DatasetStatusException)
-        {
-            return StatusMismatchResult();
-        }
-        
+        await fileService.WithdrawVersion(datasetVersion);
+
         return TypedResults.Ok();
     }
 
+    // A possible drawback of not using POST with multipart/form-data is that 
+    // using PUT requires CORS.
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     // Disable request size limit to allow streaming large files
     [DisableRequestSizeLimit]
     public async Task<Results<Ok<RoCrateFile>, ForbidHttpResult, ProblemHttpResult>> Upload(
-        string datasetIdentifier, 
+        string datasetIdentifier,
         string versionNumber,
-        FileType type, 
+        FileTypeEnum type,
         [FromQuery] string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -107,29 +84,14 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         logger.LogDebug("Upload datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, type: {type}, filePath: {filePath}",
                   datasetIdentifier, versionNumber, type, filePath);
 
-        try
-        {
-            var result = await fileService.Upload(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
-            return TypedResults.Ok(result);
-        }
-        catch (IllegalPathException)
-        {
-            return IllegalPathResult();
-        }
-        catch (ConflictException)
-        {
-            return ConflictResult();
-        }
-        catch (DatasetStatusException)
-        {
-            return StatusMismatchResult();
-        }
+        var result = await fileService.Upload(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
+        return TypedResults.Ok(result);
     }
 
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
-    public async Task<Results<Ok, ForbidHttpResult, ProblemHttpResult>> Delete(string datasetIdentifier, string versionNumber, FileType type, string filePath)
+    public async Task<Results<Ok, ForbidHttpResult, ProblemHttpResult>> Delete(string datasetIdentifier, string versionNumber, FileTypeEnum type, string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -141,22 +103,7 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         logger.LogDebug("Delete datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}:, type: {type}, filePath: {filePath}",
             datasetIdentifier, versionNumber, type, filePath);
 
-        try
-        {
-            await fileService.Delete(datasetVersion, type, filePath);
-        }
-        catch (IllegalPathException)
-        {
-            return IllegalPathResult();
-        }
-        catch (ConflictException)
-        {
-            return ConflictResult();
-        }
-        catch (DatasetStatusException)
-        {
-            return StatusMismatchResult();
-        }
+        await fileService.Delete(datasetVersion, type, filePath);
 
         return TypedResults.Ok();
     }
@@ -164,9 +111,9 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.ReadData)]
     public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound, ProblemHttpResult>> GetData(
-        string datasetIdentifier, 
-        string versionNumber, 
-        FileType type, 
+        string datasetIdentifier,
+        string versionNumber,
+        FileTypeEnum type,
         string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -179,31 +126,24 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
         logger.LogDebug("GetData datasetIdentifier: {datasetIdentifier}, versionNumber: {versionNumber}, type: {type}, filePath: {filePath}",
             datasetIdentifier, versionNumber, type, filePath);
 
-        try
+        var fileData = await fileService.GetData(datasetVersion, type, filePath);
+
+        if (fileData == null)
         {
-            var fileData = await fileService.GetData(datasetVersion, type, filePath);
-
-            if (fileData == null)
-            {
-                return TypedResults.NotFound();
-            }
-
-            Response.Headers.ContentLength = fileData.Length;
-
-            return TypedResults.Stream(fileData.Stream, "application/octet-stream", filePath);
+            return TypedResults.NotFound();
         }
-        catch (IllegalPathException)
-        {
-            return IllegalPathResult();
-        }
+
+        Response.Headers.ContentLength = fileData.Length;
+
+        return TypedResults.Stream(fileData.Stream, "application/octet-stream", filePath);
     }
 
     [HttpGet("/file/{datasetIdentifier}/{versionNumber}/zip")]
     [Authorize(Roles = Roles.ReadData)]
     public async Task<Results<Ok, ForbidHttpResult>> GetDataAsZip(
-        string datasetIdentifier, 
-        string versionNumber, 
-        [FromQuery]string[] path)
+        string datasetIdentifier,
+        string versionNumber,
+        [FromQuery] string[] path)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -267,15 +207,6 @@ public class FileController(ILogger<FileController> logger, FileService fileServ
     private bool CheckDatasetVersionClaims(DatasetVersionIdentifier datasetVersion) =>
         User.Claims.Any(c => c.Type == Claims.DatasetIdentifier && c.Value == datasetVersion.DatasetIdentifier) &&
         User.Claims.Any(c => c.Type == Claims.DatasetVersionNumber && c.Value == datasetVersion.VersionNumber);
-
-    private static ProblemHttpResult IllegalPathResult() =>
-        TypedResults.Problem("Illegal path.", statusCode: 400);
-
-    private static ProblemHttpResult ConflictResult() =>
-        TypedResults.Problem("Write conflict.", statusCode: 409);
-
-    private static ProblemHttpResult StatusMismatchResult() =>
-        TypedResults.Problem("Status mismatch.", statusCode: 400);
 
     [ApiExplorerSettings(IgnoreApi = true)]
     [Route("/error")]

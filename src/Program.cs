@@ -6,6 +6,7 @@ using DatasetFileUpload.Services.Storage;
 using DatasetFileUpload.Services.Storage.Disk;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,8 +30,23 @@ builder.Services.AddOptionsWithValidateOnStart<GeneralConfiguration>()
     .Bind(builder.Configuration)
     .ValidateDataAnnotations();
 
-builder.Services.AddControllers().AddJsonOptions(options => 
+builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = ctx =>
+    {
+        var exception = ctx.HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
+        if (exception != null && exception is ApiException apiException)
+        {
+            ctx.ProblemDetails.Detail = exception.Message;
+            ctx.ProblemDetails.Status = apiException.StatusCode;
+            ctx.HttpContext.Response.StatusCode = apiException.StatusCode;
+        }
+    };
+});
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -73,7 +89,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     options.SaveToken = true;
     options.SetJwksOptions(
         new(
-            jwksUri: generalConfiguration.JwksUri, 
+            jwksUri: generalConfiguration.JwksUri,
             audience: generalConfiguration.PublicUrl
         ));
 
@@ -111,7 +127,7 @@ if (app.Environment.IsDevelopment())
     app.UseJwksDiscovery();
 
     using var scope = app.Services.CreateScope();
-    var jwtService = scope.ServiceProvider.GetService<IJwtService>()!;   
+    var jwtService = scope.ServiceProvider.GetService<IJwtService>()!;
     var key = await jwtService.GetCurrentSigningCredentials();
 
     string CreateToken(params string[] roles)

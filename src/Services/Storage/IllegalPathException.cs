@@ -1,8 +1,6 @@
-﻿using System;
+﻿namespace DatasetFileUpload.Services.Storage;
 
-namespace DatasetFileUpload.Services.Storage;
-
-public class IllegalPathException(string path) : Exception
+internal class IllegalPathException(string path) : ApiException("Illegal path.")
 {
     public string Path { get; } = path;
 }

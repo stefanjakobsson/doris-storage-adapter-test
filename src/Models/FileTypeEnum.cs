@@ -1,6 +1,6 @@
 ﻿namespace DatasetFileUpload.Models;
 
-public enum FileType
+public enum FileTypeEnum
 {
     Data,
     Documentation

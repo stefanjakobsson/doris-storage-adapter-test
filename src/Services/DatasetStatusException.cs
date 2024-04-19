@@ -2,6 +2,7 @@
 
 namespace DatasetFileUpload.Services;
 
-public class DatasetStatusException : Exception
+internal class DatasetStatusException : ApiException
 {
+    public DatasetStatusException() : base("Status mismatch.") { }
 }

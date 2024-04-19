@@ -94,7 +94,7 @@ public class FileService(
         await StoreFetch(datasetVersion, newFetch);
     }
 
-    public async Task PublishVersion(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
+    public async Task PublishVersion(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
         if (!await lockService.TryLockDatasetVersion(datasetVersion))
         {
@@ -103,7 +103,7 @@ public class FileService(
 
         try
         {
-            await PublishVersionImpl(datasetVersion, openAccess, doi);
+            await PublishVersionImpl(datasetVersion, accessRight, doi);
         }
         finally
         {
@@ -111,7 +111,7 @@ public class FileService(
         }
     }
 
-    private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, bool openAccess, string doi)
+    private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
         Task WriteBytes(string filePath, byte[] data) =>
             storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), CreateStreamFromByteArray(data));
@@ -170,8 +170,8 @@ public class FileService(
             BaggingDate = DateTime.UtcNow,
             BagSize = ByteSize.FromBytes(totalSize).ToBinaryString(CultureInfo.InvariantCulture),
             PayloadOxum = new(octetCount, payloadManifest?.Manifest?.Items?.LongCount() ?? 0),
-            AccessRight = openAccess ? BagItInfo.AccessRightEnum.@public : BagItInfo.AccessRightEnum.nonPublic,
-            DatasetStatus = BagItInfo.DatasetStatusEnum.completed
+            AccessRight = accessRight,
+            DatasetStatus = DatasetStatusEnum.completed
         };
         byte[] bagInfoContents = bagInfo.Serialize();
 
@@ -229,7 +229,7 @@ public class FileService(
 
         var bagInfo = await BagItInfo.Parse(bagInfoFileData.Stream);
 
-        bagInfo.DatasetStatus = BagItInfo.DatasetStatusEnum.withdrawn;
+        bagInfo.DatasetStatus = DatasetStatusEnum.withdrawn;
 
         var bagInfoContents = bagInfo.Serialize();
 
@@ -243,7 +243,7 @@ public class FileService(
 
     public async Task<RoCrateFile> Upload(
         DatasetVersionIdentifier datasetVersion,
-        FileType type,
+        FileTypeEnum type,
         string filePath,
         StreamWithLength data)
     {
@@ -267,7 +267,7 @@ public class FileService(
 
     private async Task<RoCrateFile> UploadImpl(
         DatasetVersionIdentifier datasetVersion,
-        FileType type,
+        FileTypeEnum type,
         string filePath,
         StreamWithLength data)
     {
@@ -279,7 +279,7 @@ public class FileService(
             }
 
             var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
-            var prevManifest = await LoadManifest(prevVersion, type == FileType.Data);
+            var prevManifest = await LoadManifest(prevVersion, type == FileTypeEnum.Data);
             var itemsWithEqualChecksum = prevManifest.GetItemsByChecksum(checksum);
 
             if (!itemsWithEqualChecksum.Any())
@@ -345,7 +345,7 @@ public class FileService(
 
     public async Task Delete(
         DatasetVersionIdentifier datasetVersion,
-        FileType type,
+        FileTypeEnum type,
         string filePath)
     {
         filePath = GetFilePathOrThrow(type, filePath);
@@ -377,7 +377,7 @@ public class FileService(
 
     public async Task<StreamWithLength?> GetData(
         DatasetVersionIdentifier datasetVersion,
-        FileType type,
+        FileTypeEnum type,
         string filePath)
     {
         // Should we add some kind of locking here?
@@ -430,7 +430,7 @@ public class FileService(
     }
 
     // Change return type to class/record? Reuse return type from ListFiles?
-    public async IAsyncEnumerable<(FileType Type, string FilePath, StreamWithLength Data)> GetDataByPaths(
+    public async IAsyncEnumerable<(FileTypeEnum Type, string FilePath, StreamWithLength Data)> GetDataByPaths(
         DatasetVersionIdentifier datasetVersion, string[] paths)
     {
         var payloadManifest = await LoadManifest(datasetVersion, true);
@@ -485,7 +485,7 @@ public class FileService(
     }
 
 
-    private static string GetFilePathOrThrow(FileType type, string filePath)
+    private static string GetFilePathOrThrow(FileTypeEnum type, string filePath)
     {
         foreach (string pathComponent in filePath.Split('/'))
         {
@@ -518,17 +518,17 @@ public class FileService(
     private static string GetManifestFilePath(DatasetVersionIdentifier datasetVersion, bool payload) =>
         GetFullFilePath(datasetVersion, GetManifestFileName(payload));
 
-    private static bool TryGetFileType(string filePath, out FileType type)
+    private static bool TryGetFileType(string filePath, out FileTypeEnum type)
     {
         if (filePath.StartsWith("data/"))
         {
-            type = FileType.Data;
+            type = FileTypeEnum.Data;
             return true;
         }
 
         if (filePath.StartsWith("documentation/"))
         {
-            type = FileType.Documentation;
+            type = FileTypeEnum.Documentation;
             return true;
         }
 
@@ -536,7 +536,7 @@ public class FileService(
         return false;
     }
 
-    private static bool IsDataFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileType.Data;
+    private static bool IsDataFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.Data;
 
     private static string StripFileTypePrefix(string filePath)
     {
@@ -544,8 +544,8 @@ public class FileService(
         {
             return type switch
             {
-                FileType.Data => filePath["data/".Length..],
-                FileType.Documentation => filePath["documentation/".Length..],
+                FileTypeEnum.Data => filePath["data/".Length..],
+                FileTypeEnum.Documentation => filePath["documentation/".Length..],
                 _ => filePath
             };
         };

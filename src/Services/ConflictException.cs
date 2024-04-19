@@ -2,6 +2,7 @@
 
 namespace DatasetFileUpload.Services;
 
-public class ConflictException : Exception
+internal class ConflictException : ApiException
 {
+    public ConflictException() : base("Write conflict.", 409) { }
 }
