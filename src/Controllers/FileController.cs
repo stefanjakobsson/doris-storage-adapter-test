@@ -13,9 +13,14 @@ using System.Threading.Tasks;
 namespace DatasetFileUpload.Controllers;
 
 [ApiController]
-public class FileController(FileService fileService) : Controller
+public class FileController(
+    FileService fileService,
+    IAuthorizationService authorizationService,
+    IAuthorizationPolicyProvider authorizationPolicyProvider) : Controller
 {
     private readonly FileService fileService = fileService;
+    private readonly IAuthorizationService authorizationService = authorizationService;
+    private readonly IAuthorizationPolicyProvider authorizationPolicyProvider = authorizationPolicyProvider;
 
     // A possible drawback of not using POST with multipart/form-data is that 
     // using PUT requires CORS.
@@ -49,26 +54,6 @@ public class FileController(FileService fileService) : Controller
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     public async Task<Results<Ok, ForbidHttpResult, ProblemHttpResult>> DeleteFile(
-        string datasetIdentifier, 
-        string versionNumber,
-        FileTypeEnum type,
-        string filePath)
-    {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
-
-        if (!CheckDatasetVersionClaims(datasetVersion))
-        {
-            return TypedResults.Forbid();
-        }
-   
-        await fileService.DeleteFile(datasetVersion, type, filePath);
-
-        return TypedResults.Ok();
-    }
-
-    [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [Authorize(Roles = Roles.ReadData)]
-    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound, ProblemHttpResult>> GetFileData(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
@@ -81,7 +66,29 @@ public class FileController(FileService fileService) : Controller
             return TypedResults.Forbid();
         }
 
-        var fileData = await fileService.GetFileData(datasetVersion, type, filePath);
+        await fileService.DeleteFile(datasetVersion, type, filePath);
+
+        return TypedResults.Ok();
+    }
+
+    [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound, ProblemHttpResult>> GetFileData(
+        string datasetIdentifier,
+        string versionNumber,
+        FileTypeEnum type,
+        string filePath)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        var defaultPolicy = await authorizationPolicyProvider.GetDefaultPolicyAsync();
+        var authorizationResult = await authorizationService.AuthorizeAsync(User, defaultPolicy);
+
+        bool restrictToPubliclyAccessible = 
+            !authorizationResult.Succeeded || 
+            !CheckDatasetVersionClaims(datasetVersion) ||
+            !User.IsInRole(Roles.ReadData);
+
+        var fileData = await fileService.GetFileData(datasetVersion, type, filePath, restrictToPubliclyAccessible);
 
         if (fileData == null)
         {

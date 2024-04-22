@@ -38,7 +38,7 @@ public class FileService(
 
         try
         {
-            await ThrowIfPublished(datasetVersion);
+            await ThrowIfHasBeenPublished(datasetVersion);
             await SetupDatasetVersionImpl(datasetVersion);
         }
         finally
@@ -131,9 +131,6 @@ public class FileService(
 
     private async Task PublishDatasetVersionImpl(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
-        Task WriteBytes(string filePath, byte[] data) =>
-            storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), CreateStreamFromByteArray(data));
-
         async Task<(T, byte[] Checksum)?> LoadWithChecksum<T>(string filePath, Func<Stream, Task<T>> func)
         {
             using var fileData = await storageService.GetFileData(filePath);
@@ -209,8 +206,8 @@ public class FileService(
         }
         await StoreManifest(datasetVersion, false, tagManifest);
 
-        await WriteBytes(bagInfoFileName, bagInfoContents);
-        await WriteBytes(bagItFileName, bagItContents);
+        await storageService.StoreFile(GetBagInfoFilePath(datasetVersion), CreateStreamFromByteArray(bagInfoContents));
+        await storageService.StoreFile(GetBagItFilePath(datasetVersion), CreateStreamFromByteArray(bagItContents));
     }
 
     public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
@@ -222,7 +219,7 @@ public class FileService(
 
         try
         {
-            if (!await VersionIsPublished(datasetVersion))
+            if (!await VersionHasBeenPublished(datasetVersion))
             {
                 throw new DatasetStatusException();
             }
@@ -237,19 +234,7 @@ public class FileService(
 
     private async Task WithdrawDatasetVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
-        async Task<BagItInfo?> LoadBagInfo()
-        {
-            using var data = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagInfoFileName));
-
-            if (data == null)
-            {
-                return null;
-            }
-
-            return await BagItInfo.Parse(data.Stream);
-        }
-
-        var bagInfo = await LoadBagInfo();
+        var bagInfo = await LoadBagInfo(datasetVersion);
 
         if (bagInfo == null)
         {
@@ -265,8 +250,7 @@ public class FileService(
         tagManifest.AddOrUpdateItem(new(bagInfoFileName, SHA256.HashData(bagInfoContents)));
         await StoreManifest(datasetVersion, false, tagManifest);
 
-        await storageService.StoreFile(GetFullFilePath(datasetVersion, bagInfoFileName),
-            CreateStreamFromByteArray(bagInfoContents));
+        await storageService.StoreFile(GetBagInfoFilePath(datasetVersion), CreateStreamFromByteArray(bagInfoContents));
     }
 
     public async Task<RoCrateFile> StoreFile(
@@ -284,7 +268,7 @@ public class FileService(
 
         try
         {
-            await ThrowIfPublished(datasetVersion);
+            await ThrowIfHasBeenPublished(datasetVersion);
             return await StoreFileImpl(datasetVersion, type, filePath, data);
         }
         finally
@@ -385,7 +369,7 @@ public class FileService(
 
         try
         {
-            await ThrowIfPublished(datasetVersion);
+            await ThrowIfHasBeenPublished(datasetVersion);
             await DeleteFileImpl(datasetVersion, filePath);
         }
         finally
@@ -406,7 +390,8 @@ public class FileService(
     public async Task<StreamWithLength?> GetFileData(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
-        string filePath)
+        string filePath,
+        bool restrictToPubliclyAccessible)
     {
         // Should we add some kind of locking here?
         // If so we need to distinguish between read and write locks (currently we only have write locks).
@@ -415,6 +400,27 @@ public class FileService(
         // not found to the caller.
 
         filePath = GetFilePathOrThrow(type, filePath);
+
+        if (restrictToPubliclyAccessible)
+        {
+            // Do not return file data unless dataset version is published (and not withdrawn),
+            // and file type is either documentation (which entails publically accessible) or
+            // access right is public.
+
+            var bagInfo = await LoadBagInfo(datasetVersion);
+
+            if (bagInfo == null)
+            {
+                return null;
+            }
+
+            if (bagInfo.DatasetStatus != DatasetStatusEnum.completed ||
+                type == FileTypeEnum.data && bagInfo.AccessRight != AccessRightEnum.@public)
+            {
+                return null;
+            }
+        }
+
         var fetch = await LoadFetch(datasetVersion);
         filePath = GetActualFilePath(datasetVersion, fetch, filePath);
 
@@ -543,6 +549,15 @@ public class FileService(
     private static string GetManifestFilePath(DatasetVersionIdentifier datasetVersion, bool payload) =>
         GetFullFilePath(datasetVersion, GetManifestFileName(payload));
 
+    private static string GetFetchFilePath(DatasetVersionIdentifier datasetVersion) =>
+        GetFullFilePath(datasetVersion, fetchFileName);
+
+    private static string GetBagInfoFilePath(DatasetVersionIdentifier datasetVersion) =>
+        GetFullFilePath(datasetVersion, bagInfoFileName);
+
+    private static string GetBagItFilePath(DatasetVersionIdentifier datasetVersion) =>
+        GetFullFilePath(datasetVersion, bagItFileName);
+
     private static bool TryGetFileType(string filePath, out FileTypeEnum type)
     {
         if (filePath.StartsWith("data/"))
@@ -580,9 +595,6 @@ public class FileService(
         return filePath;
     }
 
-    private static string GetFetchFilePath(DatasetVersionIdentifier datasetVersion) =>
-        GetFullFilePath(datasetVersion, fetchFileName);
-
     private static string UrlEncodePath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
@@ -611,6 +623,18 @@ public class FileService(
         }
 
         return await BagItFetch.Parse(fileData.Stream);
+    }
+
+    private async Task<BagItInfo?> LoadBagInfo(DatasetVersionIdentifier datasetVersion)
+    {
+        using var data = await storageService.GetFileData(GetBagInfoFilePath(datasetVersion));
+
+        if (data == null)
+        {
+            return null;
+        }
+
+        return await BagItInfo.Parse(data.Stream);
     }
 
     private Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item) =>
@@ -722,16 +746,16 @@ public class FileService(
 
     private static StreamWithLength CreateStreamFromByteArray(byte[] data) => new(new MemoryStream(data), data.LongLength);
 
-    private async Task<bool> VersionIsPublished(DatasetVersionIdentifier datasetVersion)
+    private async Task<bool> VersionHasBeenPublished(DatasetVersionIdentifier datasetVersion)
     {
-        using var data = await storageService.GetFileData(GetFullFilePath(datasetVersion, bagItFileName));
+        using var data = await storageService.GetFileData(GetBagItFilePath(datasetVersion));
 
         return data != null;
     }
 
-    private async Task ThrowIfPublished(DatasetVersionIdentifier datasetVersion)
+    private async Task ThrowIfHasBeenPublished(DatasetVersionIdentifier datasetVersion)
     {
-        if (await VersionIsPublished(datasetVersion))
+        if (await VersionHasBeenPublished(datasetVersion))
         {
             throw new DatasetStatusException();
         }
