@@ -79,14 +79,22 @@ public class FileController(
         string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        bool restrictToPubliclyAccessible = true;
 
-        var defaultPolicy = await authorizationPolicyProvider.GetDefaultPolicyAsync();
-        var authorizationResult = await authorizationService.AuthorizeAsync(User, defaultPolicy);
+        if (Request.Headers.Authorization.Count > 0)
+        {
+            var defaultPolicy = await authorizationPolicyProvider.GetDefaultPolicyAsync();
+            var authorizationResult = await authorizationService.AuthorizeAsync(User, defaultPolicy);
 
-        bool restrictToPubliclyAccessible = 
-            !authorizationResult.Succeeded || 
-            !CheckDatasetVersionClaims(datasetVersion) ||
-            !User.IsInRole(Roles.ReadData);
+            if (!authorizationResult.Succeeded ||
+                !User.IsInRole(Roles.ReadData) ||
+                !CheckDatasetVersionClaims(datasetVersion))
+            {
+                return TypedResults.Forbid();
+            }
+
+            restrictToPubliclyAccessible = false;
+        }
 
         var fileData = await fileService.GetFileData(datasetVersion, type, filePath, restrictToPubliclyAccessible);
 
