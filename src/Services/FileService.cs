@@ -29,7 +29,7 @@ public class FileService(
     private const string bagItFileName = "bagit.txt";
     private const string bagInfoFileName = "bag-info.txt";
 
-    public async Task SetupVersion(DatasetVersionIdentifier datasetVersion)
+    public async Task SetupDatasetVersion(DatasetVersionIdentifier datasetVersion)
     {
         if (!await lockService.TryLockDatasetVersion(datasetVersion))
         {
@@ -39,7 +39,7 @@ public class FileService(
         try
         {
             await ThrowIfPublished(datasetVersion);
-            await SetupVersionImpl(datasetVersion);
+            await SetupDatasetVersionImpl(datasetVersion);
         }
         finally
         {
@@ -47,7 +47,7 @@ public class FileService(
         }
     }
 
-    private async Task SetupVersionImpl(DatasetVersionIdentifier datasetVersion)
+    private async Task SetupDatasetVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
         async Task CopyPayloadManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion)
         {
@@ -112,7 +112,7 @@ public class FileService(
         await StoreFetch(datasetVersion, newFetch);
     }
 
-    public async Task PublishVersion(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
+    public async Task PublishDatasetVersion(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
         if (!await lockService.TryLockDatasetVersion(datasetVersion))
         {
@@ -121,7 +121,7 @@ public class FileService(
 
         try
         {
-            await PublishVersionImpl(datasetVersion, accessRight, doi);
+            await PublishDatasetVersionImpl(datasetVersion, accessRight, doi);
         }
         finally
         {
@@ -129,7 +129,7 @@ public class FileService(
         }
     }
 
-    private async Task PublishVersionImpl(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
+    private async Task PublishDatasetVersionImpl(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
         Task WriteBytes(string filePath, byte[] data) =>
             storageService.StoreFile(GetFullFilePath(datasetVersion, filePath), CreateStreamFromByteArray(data));
@@ -213,7 +213,7 @@ public class FileService(
         await WriteBytes(bagItFileName, bagItContents);
     }
 
-    public async Task WithdrawVersion(DatasetVersionIdentifier datasetVersion)
+    public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
     {
         if (!await lockService.TryLockDatasetVersion(datasetVersion))
         {
@@ -227,7 +227,7 @@ public class FileService(
                 throw new DatasetStatusException();
             }
 
-            await WithdrawVersionImpl(datasetVersion);
+            await WithdrawDatasetVersionImpl(datasetVersion);
         }
         finally
         {
@@ -235,7 +235,7 @@ public class FileService(
         }
     }
 
-    private async Task WithdrawVersionImpl(DatasetVersionIdentifier datasetVersion)
+    private async Task WithdrawDatasetVersionImpl(DatasetVersionIdentifier datasetVersion)
     {
         async Task<BagItInfo?> LoadBagInfo()
         {
@@ -269,7 +269,7 @@ public class FileService(
             CreateStreamFromByteArray(bagInfoContents));
     }
 
-    public async Task<RoCrateFile> Upload(
+    public async Task<RoCrateFile> StoreFile(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
@@ -285,7 +285,7 @@ public class FileService(
         try
         {
             await ThrowIfPublished(datasetVersion);
-            return await UploadImpl(datasetVersion, type, filePath, data);
+            return await StoreFileImpl(datasetVersion, type, filePath, data);
         }
         finally
         {
@@ -293,7 +293,7 @@ public class FileService(
         }
     }
 
-    private async Task<RoCrateFile> UploadImpl(
+    private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
@@ -371,7 +371,7 @@ public class FileService(
         return result;
     }
 
-    public async Task Delete(
+    public async Task DeleteFile(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath)
@@ -386,7 +386,7 @@ public class FileService(
         try
         {
             await ThrowIfPublished(datasetVersion);
-            await DeleteImpl(datasetVersion, filePath);
+            await DeleteFileImpl(datasetVersion, filePath);
         }
         finally
         {
@@ -394,7 +394,7 @@ public class FileService(
         }
     }
 
-    private async Task DeleteImpl(
+    private async Task DeleteFileImpl(
         DatasetVersionIdentifier datasetVersion,
         string filePath)
     {
@@ -403,7 +403,7 @@ public class FileService(
         await RemoveItemFromFetch(datasetVersion, filePath);
     }
 
-    public async Task<StreamWithLength?> GetData(
+    public async Task<StreamWithLength?> GetFileData(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath)
@@ -458,7 +458,7 @@ public class FileService(
     }
 
     // Change return type to class/record? Reuse return type from ListFiles?
-    public async IAsyncEnumerable<(FileTypeEnum Type, string FilePath, StreamWithLength Data)> GetDataByPaths(
+    public async IAsyncEnumerable<(FileTypeEnum Type, string FilePath, StreamWithLength Data)> GetFileDataByPaths(
         DatasetVersionIdentifier datasetVersion, string[] paths)
     {
         var payloadManifest = await LoadManifest(datasetVersion, true);

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.IO.Compression;
 using System.Linq;
@@ -42,7 +41,7 @@ public class FileController(FileService fileService) : Controller
             return TypedResults.Problem("Missing Content-Length.", statusCode: 400);
         }
 
-        var result = await fileService.Upload(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
+        var result = await fileService.StoreFile(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
         return TypedResults.Ok(result);
     }
 
@@ -62,14 +61,14 @@ public class FileController(FileService fileService) : Controller
             return TypedResults.Forbid();
         }
    
-        await fileService.Delete(datasetVersion, type, filePath);
+        await fileService.DeleteFile(datasetVersion, type, filePath);
 
         return TypedResults.Ok();
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.ReadData)]
-    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound, ProblemHttpResult>> GetData(
+    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound, ProblemHttpResult>> GetFileData(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
@@ -82,7 +81,7 @@ public class FileController(FileService fileService) : Controller
             return TypedResults.Forbid();
         }
 
-        var fileData = await fileService.GetData(datasetVersion, type, filePath);
+        var fileData = await fileService.GetFileData(datasetVersion, type, filePath);
 
         if (fileData == null)
         {
@@ -96,7 +95,7 @@ public class FileController(FileService fileService) : Controller
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]
     [Authorize(Roles = Roles.ReadData)]
-    public async Task<Results<Ok, ForbidHttpResult>> GetDataAsZip(
+    public async Task<Results<Ok, ForbidHttpResult>> GetFileDataAsZip(
         string datasetIdentifier,
         string versionNumber,
         [FromQuery] string[] path)
@@ -113,7 +112,7 @@ public class FileController(FileService fileService) : Controller
 
         using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
 
-        await foreach (var (type, filePath, data) in fileService.GetDataByPaths(datasetVersion, path))
+        await foreach (var (type, filePath, data) in fileService.GetFileDataByPaths(datasetVersion, path))
         {
             var entry = archive.CreateEntry(type.ToString() + '/' + filePath, CompressionLevel.NoCompression);
             using var entryStream = entry.Open();

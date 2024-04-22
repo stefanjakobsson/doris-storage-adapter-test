@@ -15,11 +15,11 @@ public class DatasetVersionController(FileService fileService) : Controller
 
     [HttpPut("{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
-    public async Task<Results<Ok, ProblemHttpResult>> SetupVersion(string datasetIdentifier, string versionNumber)
+    public async Task<Results<Ok, ProblemHttpResult>> SetupDatasetVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.SetupVersion(datasetVersion);
+        await fileService.SetupDatasetVersion(datasetVersion);
 
         return TypedResults.Ok();
     }
@@ -27,7 +27,7 @@ public class DatasetVersionController(FileService fileService) : Controller
     [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
     [Authorize(Roles = Roles.Service)]
     [Consumes("application/x-www-form-urlencoded")]
-    public async Task<Results<Ok, ProblemHttpResult>> PublishVersion(
+    public async Task<Results<Ok, ProblemHttpResult>> PublishDatasetVersion(
         string datasetIdentifier,
         string versionNumber,
         [FromForm] AccessRightEnum access_right,
@@ -35,18 +35,18 @@ public class DatasetVersionController(FileService fileService) : Controller
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.PublishVersion(datasetVersion, access_right, doi);
+        await fileService.PublishDatasetVersion(datasetVersion, access_right, doi);
 
         return TypedResults.Ok();
     }
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/withdraw")]
     [Authorize(Roles = Roles.Service)]
-    public async Task<Results<Ok, ProblemHttpResult>> WithdrawVersion(string datasetIdentifier, string versionNumber)
+    public async Task<Results<Ok, ProblemHttpResult>> WithdrawDatasetVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.WithdrawVersion(datasetVersion);
+        await fileService.WithdrawDatasetVersion(datasetVersion);
 
         return TypedResults.Ok();
     }
