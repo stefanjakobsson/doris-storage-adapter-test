@@ -53,7 +53,7 @@ public class FileController(
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
-    public async Task<Results<Ok, ForbidHttpResult, ProblemHttpResult>> DeleteFile(
+    public async Task<Results<Ok, ForbidHttpResult>> DeleteFile(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
@@ -72,7 +72,7 @@ public class FileController(
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound, ProblemHttpResult>> GetFileData(
+    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetFileData(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
