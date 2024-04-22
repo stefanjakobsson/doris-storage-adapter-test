@@ -75,7 +75,7 @@ public class BagItInfo
             return null;
         });
 
-        set => SetOrRemoveItem(payloadOxumLabel, value == null ? null : 
+        set => SetOrRemoveItem(payloadOxumLabel, value == null ? null :
             value.OctetCount.ToString() + '.' + value.StreamCount.ToString());
     }
 
@@ -148,6 +148,25 @@ public class BagItInfo
         string? line;
         string value = "";
         string label = "";
+
+        void AddItemIfNotEmpty()
+        {
+            if (value == "")
+            {
+                return;
+            }
+
+            var item = new BagItInfoItem(label, value);
+            if (result.items.TryGetValue(label, out var existing))
+            {
+                existing.Add(item);
+            }
+            else
+            {
+                result.items[label] = [item];
+            }
+        }
+
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {
             if (line.StartsWith(' ') || line.StartsWith('\t'))
@@ -157,23 +176,16 @@ public class BagItInfo
             }
             else
             {
-                if (value != "")
-                {
-                    var item = new BagItInfoItem(label, value);
-                    if (result.items.TryGetValue(label, out var existing))
-                    {
-                        existing.Add(item);
-                    }
-                    else
-                    {
-                        result.items[label] = [item];
-                    }
-                }
+                AddItemIfNotEmpty();
+
                 int index = line.IndexOf(": ");
                 label = line[..index];
                 value = line[(index + 2)..];
             }
         }
+
+        // Add last item
+        AddItemIfNotEmpty();
 
         return result;
     }
