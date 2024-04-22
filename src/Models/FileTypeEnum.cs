@@ -2,6 +2,6 @@
 
 public enum FileTypeEnum
 {
-    Data,
-    Documentation
+    data,
+    documentation
 }

@@ -307,7 +307,7 @@ public class FileService(
             }
 
             var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
-            var prevManifest = await LoadManifest(prevVersion, type == FileTypeEnum.Data);
+            var prevManifest = await LoadManifest(prevVersion, type == FileTypeEnum.data);
             var itemsWithEqualChecksum = prevManifest.GetItemsByChecksum(checksum);
 
             if (!itemsWithEqualChecksum.Any())
@@ -522,7 +522,7 @@ public class FileService(
             }
         }
 
-        return type.ToString().ToLower() + '/' + filePath;
+        return type.ToString() + '/' + filePath;
     }
 
     private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion) =>
@@ -547,13 +547,13 @@ public class FileService(
     {
         if (filePath.StartsWith("data/"))
         {
-            type = FileTypeEnum.Data;
+            type = FileTypeEnum.data;
             return true;
         }
 
         if (filePath.StartsWith("documentation/"))
         {
-            type = FileTypeEnum.Documentation;
+            type = FileTypeEnum.documentation;
             return true;
         }
 
@@ -561,9 +561,9 @@ public class FileService(
         return false;
     }
 
-    private static bool IsDataFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.Data;
+    private static bool IsDataFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.data;
 
-    private static bool IsDocumentationFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.Documentation;
+    private static bool IsDocumentationFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.documentation;
 
     private static string StripFileTypePrefix(string filePath)
     {
@@ -571,8 +571,8 @@ public class FileService(
         {
             return type switch
             {
-                FileTypeEnum.Data => filePath["data/".Length..],
-                FileTypeEnum.Documentation => filePath["documentation/".Length..],
+                FileTypeEnum.data => filePath["data/".Length..],
+                FileTypeEnum.documentation => filePath["documentation/".Length..],
                 _ => filePath
             };
         };
