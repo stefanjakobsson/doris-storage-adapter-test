@@ -100,7 +100,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
 });
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
-builder.Services.AddTransient<FileService>();
+builder.Services.AddTransient<ServiceImplementation>();
 
 //builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
 builder.Services.AddTransient<IStorageService, FileSystemStorageService>();

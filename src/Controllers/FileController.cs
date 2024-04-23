@@ -14,11 +14,11 @@ namespace DatasetFileUpload.Controllers;
 
 [ApiController]
 public class FileController(
-    FileService fileService,
+    ServiceImplementation appService,
     IAuthorizationService authorizationService,
     IAuthorizationPolicyProvider authorizationPolicyProvider) : Controller
 {
-    private readonly FileService fileService = fileService;
+    private readonly ServiceImplementation appService = appService;
     private readonly IAuthorizationService authorizationService = authorizationService;
     private readonly IAuthorizationPolicyProvider authorizationPolicyProvider = authorizationPolicyProvider;
 
@@ -46,7 +46,7 @@ public class FileController(
             return TypedResults.Problem("Missing Content-Length.", statusCode: 400);
         }
 
-        var result = await fileService.StoreFile(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
+        var result = await appService.StoreFile(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
         return TypedResults.Ok(result);
     }
 
@@ -66,7 +66,7 @@ public class FileController(
             return TypedResults.Forbid();
         }
 
-        await fileService.DeleteFile(datasetVersion, type, filePath);
+        await appService.DeleteFile(datasetVersion, type, filePath);
 
         return TypedResults.Ok();
     }
@@ -96,7 +96,7 @@ public class FileController(
             restrictToPubliclyAccessible = false;
         }
 
-        var fileData = await fileService.GetFileData(datasetVersion, type, filePath, restrictToPubliclyAccessible);
+        var fileData = await appService.GetFileData(datasetVersion, type, filePath, restrictToPubliclyAccessible);
 
         if (fileData == null)
         {
@@ -127,7 +127,7 @@ public class FileController(
 
         using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
 
-        await foreach (var (type, filePath, data) in fileService.GetFileDataByPaths(datasetVersion, path))
+        await foreach (var (type, filePath, data) in appService.GetFileDataByPaths(datasetVersion, path))
         {
             var entry = archive.CreateEntry(type.ToString() + '/' + filePath, CompressionLevel.NoCompression);
             using var entryStream = entry.Open();
@@ -163,7 +163,7 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await foreach (var file in fileService.ListFiles(datasetVersion))
+        await foreach (var file in appService.ListFiles(datasetVersion))
         {
             yield return file;
         }

@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services;
 
-public class FileService(
+public class ServiceImplementation(
     IStorageService storageService,
     ILockService lockService)
 {

@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
 
-public class DatasetVersionController(FileService fileService) : Controller
+public class DatasetVersionController(ServiceImplementation appService) : Controller
 {
-    private readonly FileService fileService = fileService;
+    private readonly ServiceImplementation appService = appService;
 
     [HttpPut("{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
@@ -17,7 +17,7 @@ public class DatasetVersionController(FileService fileService) : Controller
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.SetupDatasetVersion(datasetVersion);
+        await appService.SetupDatasetVersion(datasetVersion);
 
         return Ok();
     }
@@ -33,7 +33,7 @@ public class DatasetVersionController(FileService fileService) : Controller
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.PublishDatasetVersion(datasetVersion, access_right, doi);
+        await appService.PublishDatasetVersion(datasetVersion, access_right, doi);
 
         return Ok();
     }
@@ -44,7 +44,7 @@ public class DatasetVersionController(FileService fileService) : Controller
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await fileService.WithdrawDatasetVersion(datasetVersion);
+        await appService.WithdrawDatasetVersion(datasetVersion);
 
         return Ok();
     }
