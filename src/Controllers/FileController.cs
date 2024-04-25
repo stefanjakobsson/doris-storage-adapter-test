@@ -2,6 +2,7 @@ using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -28,6 +29,7 @@ public class FileController(
     [Authorize(Roles = Roles.WriteData)]
     // Disable request size limit to allow streaming large files
     [DisableRequestSizeLimit]
+    [EnableCors(nameof(StoreFile))]
     public async Task<Results<Ok<RoCrateFile>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
         string datasetIdentifier,
         string versionNumber,
@@ -53,6 +55,7 @@ public class FileController(
 
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
+    [EnableCors(nameof(DeleteFile))]
     public async Task<Results<Ok, ForbidHttpResult>> DeleteFile(
         string datasetIdentifier,
         string versionNumber,
@@ -72,6 +75,7 @@ public class FileController(
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [EnableCors(nameof(GetFileData))]
     public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetFileData(
         string datasetIdentifier,
         string versionNumber,
@@ -110,6 +114,7 @@ public class FileController(
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]
     [Authorize(Roles = Roles.ReadData)]
+    [EnableCors(nameof(GetFileDataAsZip))]
     public async Task<Results<Ok, ForbidHttpResult>> GetFileDataAsZip(
         string datasetIdentifier,
         string versionNumber,

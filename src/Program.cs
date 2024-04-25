@@ -1,5 +1,6 @@
+using DatasetFileUpload;
 using DatasetFileUpload.Authorization;
-using DatasetFileUpload.Configuration;
+using DatasetFileUpload.Controllers;
 using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Exceptions;
 using DatasetFileUpload.Services.Lock;
@@ -8,10 +9,12 @@ using DatasetFileUpload.Services.Storage.Disk;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
 using NetDevPack.Security.Jwt.Core.Interfaces;
 using NetDevPack.Security.JwtExtensions;
@@ -23,17 +26,22 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOptionsWithValidateOnStart<FileSystemStorageServiceConfiguration>()
-    .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
-    .ValidateDataAnnotations();
-
 builder.Services.AddOptionsWithValidateOnStart<GeneralConfiguration>()
     .Bind(builder.Configuration)
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptionsWithValidateOnStart<AuthorizationConfiguration>()
+    .Bind(builder.Configuration.GetSection(AuthorizationConfiguration.ConfigurationSection))
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptionsWithValidateOnStart<FileSystemStorageServiceConfiguration>()
+    .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
     .ValidateDataAnnotations();
 
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+// Map ApiExceptions to problem details response
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = ctx =>
@@ -81,15 +89,20 @@ if (builder.Environment.IsDevelopment())
     builder.Services.AddJwksManager().PersistKeysInMemory();
 }
 
+var authorizationConfiguration = builder.Configuration
+    .GetSection(AuthorizationConfiguration.ConfigurationSection)
+    .Get<AuthorizationConfiguration>()!;
+
 var generalConfiguration = builder.Configuration.Get<GeneralConfiguration>()!;
 
+// Set up JWT authentication/authorization
 builder.Services.AddAuthentication().AddJwtBearer(options =>
 {
     options.RequireHttpsMetadata = true;
     options.SaveToken = true;
     options.SetJwksOptions(
         new(
-            jwksUri: generalConfiguration.JwksUri,
+            jwksUri: authorizationConfiguration.JwksUri,
             audience: generalConfiguration.PublicUrl
         ));
 
@@ -97,6 +110,33 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     // making algorithm confusion attacks impossible, but also means that it's harder
     // for SND to change the signing algorithm.
     options.TokenValidationParameters.ValidAlgorithms = ["PS256"];
+});
+
+// Setup up CORS policys per endpoint
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(nameof(FileController.StoreFile), policy =>
+    {
+        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithHeaders(HeaderNames.ContentLength);
+        policy.WithMethods(HttpMethods.Put);
+    });
+    options.AddPolicy(nameof(FileController.DeleteFile), policy =>
+    {
+        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithMethods(HttpMethods.Delete);
+    });
+    options.AddPolicy(nameof(FileController.GetFileData), policy =>
+    {
+        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithMethods(HttpMethods.Get);
+    });
+    options.AddPolicy(nameof(FileController.GetFileDataAsZip), policy =>
+    {
+        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithMethods(HttpMethods.Get);
+        policy.WithExposedHeaders(HeaderNames.ContentDisposition);
+    });
 });
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
@@ -116,6 +156,8 @@ if (app.Environment.IsDevelopment())
 }
 
 //app.UseHttpsRedirection();
+
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
