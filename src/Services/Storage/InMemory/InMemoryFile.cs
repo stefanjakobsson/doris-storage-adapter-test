@@ -1,8 +1,9 @@
-﻿using System;
+﻿namespace DatasetFileUpload.Services.Storage.InMemory;
 
-namespace DatasetFileUpload.Services.Storage.InMemory;
-
-internal record InMemoryFile(
-    DateTime DateCreated,
-    DateTime DateModified,
-    byte[] Data);
+internal class InMemoryFile(
+    StorageServiceFile metadata,
+    byte[] data)
+{
+    public StorageServiceFile Metadata { get; set; } = metadata;
+    public byte[] Data { get; set; } = data;
+}

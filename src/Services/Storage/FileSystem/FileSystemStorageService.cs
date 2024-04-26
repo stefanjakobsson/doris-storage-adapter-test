@@ -16,7 +16,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
   
-    public async Task<RoCrateFile> StoreFile(string filePath, StreamWithLength data)
+    public async Task<StorageServiceFile> StoreFile(string filePath, StreamWithLength data, string? contentType)
     {
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
@@ -42,15 +42,13 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
 
         var fileInfo = new FileInfo(filePath);
 
-        return new RoCrateFile
+        return new StorageServiceFile
         {
-            Id = NormalizePath(Path.GetRelativePath(basePath, filePath)),
-            ContentSize = fileInfo.Length,
+            Path = NormalizePath(Path.GetRelativePath(basePath, filePath)),
+            Size = fileInfo.Length,
             DateCreated = fileInfo.CreationTime.ToUniversalTime(),
             DateModified = fileInfo.LastWriteTime.ToUniversalTime(),
-            EncodingFormat = null,
-            Sha256 = null,
-            Url = null
+            ContentType = null
         };
     }
 
@@ -94,7 +92,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
     }
 
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(string path)
+    public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
     {
         // This is a hack to avoid warning CS1998 (async method without await)
         await Task.CompletedTask;
@@ -131,13 +129,11 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
 
             yield return new()
             {
-                Id = NormalizePath(relativePath),
-                ContentSize = file.Length,
+                Path = NormalizePath(relativePath),
+                Size = file.Length,
                 DateCreated = file.CreationTime.ToUniversalTime(),
                 DateModified = file.LastWriteTime.ToUniversalTime(),
-                EncodingFormat = null,
-                Sha256 = null,
-                Url = null
+                ContentType = null
             };
         }
     }

@@ -23,8 +23,6 @@ public class FileController(
     private readonly IAuthorizationService authorizationService = authorizationService;
     private readonly IAuthorizationPolicyProvider authorizationPolicyProvider = authorizationPolicyProvider;
 
-    // A possible drawback of not using POST with multipart/form-data is that 
-    // using PUT requires CORS.
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     // Disable request size limit to allow streaming large files
@@ -48,7 +46,9 @@ public class FileController(
             return TypedResults.Problem("Missing Content-Length.", statusCode: 400);
         }
 
-        var result = await appService.StoreFile(datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value));
+        var result = await appService.StoreFile(
+            datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value), Request.Headers.ContentType);
+
         return TypedResults.Ok(result);
     }
 

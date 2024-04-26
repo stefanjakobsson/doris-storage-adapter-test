@@ -1,5 +1,4 @@
-﻿using DatasetFileUpload.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,15 +9,38 @@ internal class InMemoryStorageService : IStorageService
 {
     private readonly Dictionary<string, InMemoryFile> files = [];
 
-    public async Task<RoCrateFile> StoreFile(string filePath, StreamWithLength data)
+    public async Task<StorageServiceFile> StoreFile(string filePath, StreamWithLength data, string? contentType)
     {
         using var memoryStream = new MemoryStream();
         await data.Stream.CopyToAsync(memoryStream);
+        var byteArray = memoryStream.ToArray();
 
-        var file = new InMemoryFile(DateTime.UtcNow, DateTime.UtcNow, memoryStream.ToArray());
-        files[filePath] = file;
+        if (files.TryGetValue(filePath, out InMemoryFile? file))
+        {
+            file.Data = byteArray;
+            file.Metadata = file.Metadata with
+            {
+                DateModified = DateTime.UtcNow,
+                Size = byteArray.LongLength,
+                ContentType = contentType
+            };
+        }
+        else
+        {
+            file = new(new()
+            {
+                Path = filePath,
+                DateCreated = DateTime.UtcNow,
+                DateModified = DateTime.UtcNow,
+                ContentType = contentType,
+                Size = data.Length
+            },
+            byteArray);
 
-        return MapFile(filePath, file);
+            files[filePath] = file;
+        }
+
+        return file.Metadata;
     }
 
     public Task DeleteFile(string filePath)
@@ -37,7 +59,7 @@ internal class InMemoryStorageService : IStorageService
         return Task.FromResult<StreamWithLength?>(null);
     }
 
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(string path)
+    public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
     {
         // This is a hack to avoid warning CS1998 (async method without await)
         await Task.CompletedTask;
@@ -46,16 +68,8 @@ internal class InMemoryStorageService : IStorageService
         {
             if (value.Key.StartsWith(path))
             {
-                yield return MapFile(value.Key, value.Value);
+                yield return value.Value.Metadata;
             }
         }
     }
-
-    private static RoCrateFile MapFile(string filePath, InMemoryFile file) => new()
-    {
-        Id = filePath,
-        DateCreated = file.DateCreated,
-        DateModified = file.DateModified,
-        ContentSize = file.Data.LongLength
-    };
 }

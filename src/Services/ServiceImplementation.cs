@@ -54,7 +54,7 @@ public class ServiceImplementation(
             using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, true));
             if (fileData != null)
             {
-                await storageService.StoreFile(GetManifestFilePath(toVersion, true), fileData);
+                await storageService.StoreFile(GetManifestFilePath(toVersion, true), fileData, "text/plain");
             }
         }
 
@@ -176,10 +176,10 @@ public class ServiceImplementation(
         {
             tagManifest.AddOrUpdateItem(new(fetchFileName, fetch.Value.Checksum));
         }
-        await StoreManifest(datasetVersion, false, tagManifest);
 
-        await storageService.StoreFile(GetBagInfoFilePath(datasetVersion), CreateStreamFromByteArray(bagInfoContents));
-        await storageService.StoreFile(GetBagItFilePath(datasetVersion), CreateStreamFromByteArray(bagItContents));
+        await StoreManifest(datasetVersion, false, tagManifest);
+        await StoreBagInfo(datasetVersion, bagInfoContents);
+        await storageService.StoreFile(GetBagItFilePath(datasetVersion), CreateStreamFromByteArray(bagItContents), "text/plain");
     }
 
     public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
@@ -222,14 +222,15 @@ public class ServiceImplementation(
         tagManifest.AddOrUpdateItem(new(bagInfoFileName, SHA256.HashData(bagInfoContents)));
         await StoreManifest(datasetVersion, false, tagManifest);
 
-        await storageService.StoreFile(GetBagInfoFilePath(datasetVersion), CreateStreamFromByteArray(bagInfoContents));
+        await StoreBagInfo(datasetVersion, bagInfoContents);
     }
 
     public async Task<RoCrateFile> StoreFile(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
-        StreamWithLength data)
+        StreamWithLength data,
+        string? contentType)
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
@@ -241,7 +242,7 @@ public class ServiceImplementation(
         try
         {
             await ThrowIfHasBeenPublished(datasetVersion);
-            return await StoreFileImpl(datasetVersion, filePath, data);
+            return await StoreFileImpl(datasetVersion, type, filePath, data, contentType);
         }
         finally
         {
@@ -252,7 +253,8 @@ public class ServiceImplementation(
     private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
         string filePath,
-        StreamWithLength data)
+        StreamWithLength data,
+        string? contentType)
     {
         async Task<string?> Deduplicate(byte[] checksum)
         {
@@ -299,7 +301,7 @@ public class ServiceImplementation(
             bytesRead += e.Count;
         };
 
-        var result = await storageService.StoreFile(fullFilePath, new(monitoringStream, data.Length));
+        var result = await storageService.StoreFile(fullFilePath, data with { Stream = monitoringStream }, contentType);
 
         byte[] checksum = sha256.Hash!;
 
@@ -319,11 +321,17 @@ public class ServiceImplementation(
         // Update payload manifest
         await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
 
-        result.Id = filePath;
-        result.ContentSize = bytesRead;
-        result.Sha256 = Convert.ToHexString(checksum);
-
-        return result;
+        return new()
+        {
+            Id = result.Path,
+            AdditionalType = type,
+            ContentSize = bytesRead,
+            DateCreated = result.DateCreated ?? DateTime.UtcNow,
+            DateModified = result.DateModified ?? DateTime.UtcNow,
+            EncodingFormat = result.ContentType,
+            Sha256 = Convert.ToHexString(checksum),
+            Url = null
+        };
     }
 
     public async Task DeleteFile(
@@ -413,10 +421,11 @@ public class ServiceImplementation(
 
         await foreach (var file in ListPayloadFiles(datasetVersion))
         {
-            file.Sha256 = GetChecksum(file.Id);
-            file.Id = StripFileTypePrefix(file.Id);
-
-            yield return file;
+            yield return file with
+            {
+                Id = StripFileTypePrefix(file.Id),
+                Sha256 = GetChecksum(file.Id)
+            };
         }
 
         foreach (var file in fetch.Items)
@@ -424,6 +433,7 @@ public class ServiceImplementation(
             yield return new()
             {
                 Id = StripFileTypePrefix(file.FilePath),
+                AdditionalType = TryGetFileType(file.FilePath, out var type) ? type : default,
                 ContentSize = file.Length == null ? 0 : file.Length.Value,
                 Sha256 = GetChecksum(file.FilePath)
             };
@@ -661,7 +671,7 @@ public class ServiceImplementation(
 
         if (manifest.Items.Any())
         {
-            return storageService.StoreFile(filePath, CreateStreamFromByteArray(manifest.Serialize()));
+            return storageService.StoreFile(filePath, CreateStreamFromByteArray(manifest.Serialize()), "text/plain");
         }
 
         return storageService.DeleteFile(filePath);
@@ -673,10 +683,17 @@ public class ServiceImplementation(
 
         if (fetch.Items.Any())
         {
-            return storageService.StoreFile(filePath, CreateStreamFromByteArray(fetch.Serialize()));
+            return storageService.StoreFile(filePath, CreateStreamFromByteArray(fetch.Serialize()), "text/plain");
         }
 
         return storageService.DeleteFile(filePath);
+    }
+
+    private Task<StorageServiceFile> StoreBagInfo(DatasetVersionIdentifier datasetVersion, byte[] contents)
+    {
+        string filePath = GetBagInfoFilePath(datasetVersion);
+
+        return storageService.StoreFile(filePath, CreateStreamFromByteArray(contents), "text/plain");
     }
 
     private static string GetActualFilePath(DatasetVersionIdentifier datasetVersion, BagItFetch fetch, string filePath)
@@ -695,12 +712,15 @@ public class ServiceImplementation(
 
         await foreach (var file in storageService.ListFiles(path + "/data/"))
         {
-            file.Id = file.Id[(path.Length + 1)..];
+            string id = file.Id[(path.Length + 1)..];
 
-            if (TryGetFileType(file.Id, out var fileType))
+            if (TryGetFileType(id, out var fileType))
             {
-                file.AdditionalType = fileType;
-                yield return file;
+                yield return file with
+                {
+                    Id = id,
+                    AdditionalType = fileType
+                };
             }
         }
     }
