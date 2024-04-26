@@ -58,23 +58,6 @@ public class ServiceImplementation(
             }
         }
 
-        async Task CopyTagManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion)
-        {
-            using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, false));
-            if (fileData != null)
-            {
-                var sourceManifest = await BagItManifest.Parse(fileData.Stream);
-                var newManifest = new BagItManifest();
-
-                foreach (var item in sourceManifest.Items.Where(i => IsDocumentationFile(i.FilePath)))
-                {
-                    newManifest.AddOrUpdateItem(item);
-                }
-
-                await StoreManifest(toVersion, false, newManifest);
-            }
-        }
-
         if (await storageService.ListFiles(GetDatasetVersionPath(datasetVersion))
                 .GetAsyncEnumerator().MoveNextAsync())
         {
@@ -92,7 +75,6 @@ public class ServiceImplementation(
         var newFetch = new BagItFetch();
 
         await CopyPayloadManifest(previousVersion, datasetVersion);
-        await CopyTagManifest(previousVersion, datasetVersion);
 
         string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
 
@@ -101,7 +83,7 @@ public class ServiceImplementation(
             newFetch.AddOrUpdateItem(item);
         }
 
-        await foreach (var file in ListFilesForDatasetVersion(previousVersion))
+        await foreach (var file in ListPayloadFiles(previousVersion))
         {
             if (!fetch.Contains(file.Id))
             {
@@ -154,25 +136,15 @@ public class ServiceImplementation(
 
         var fetch = await LoadFetchWithChecksum();
         long octetCount = 0;
-        long totalSize = 0;
-        await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
+        await foreach (var file in ListPayloadFiles(datasetVersion))
         {
-            totalSize += file.ContentSize;
-            if (IsDataFile(file.Id))
-            {
-                octetCount += file.ContentSize;
-            }
+            octetCount += file.ContentSize;
         }
         foreach (var item in fetch?.Fetch?.Items ?? [])
         {
             if (item.Length != null)
             {
-                totalSize += item.Length.Value;
-
-                if (IsDataFile(item.FilePath))
-                {
-                    octetCount += item.Length.Value;
-                }
+                octetCount += item.Length.Value;
             }
         }
 
@@ -183,7 +155,7 @@ public class ServiceImplementation(
             ExternalIdentifier = doi,
             BagGroupIdentifier = datasetVersion.DatasetIdentifier,
             BaggingDate = DateTime.UtcNow,
-            BagSize = ByteSize.FromBytes(totalSize).ToBinaryString(CultureInfo.InvariantCulture),
+            BagSize = ByteSize.FromBytes(octetCount).ToBinaryString(CultureInfo.InvariantCulture),
             PayloadOxum = new(octetCount, payloadManifest?.Manifest?.Items?.LongCount() ?? 0),
             AccessRight = accessRight,
             DatasetStatus = DatasetStatusEnum.completed
@@ -269,7 +241,7 @@ public class ServiceImplementation(
         try
         {
             await ThrowIfHasBeenPublished(datasetVersion);
-            return await StoreFileImpl(datasetVersion, type, filePath, data);
+            return await StoreFileImpl(datasetVersion, filePath, data);
         }
         finally
         {
@@ -279,7 +251,6 @@ public class ServiceImplementation(
 
     private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
-        FileTypeEnum type,
         string filePath,
         StreamWithLength data)
     {
@@ -291,7 +262,7 @@ public class ServiceImplementation(
             }
 
             var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
-            var prevManifest = await LoadManifest(prevVersion, type == FileTypeEnum.data);
+            var prevManifest = await LoadManifest(prevVersion, true);
             var itemsWithEqualChecksum = prevManifest.GetItemsByChecksum(checksum);
 
             if (!itemsWithEqualChecksum.Any())
@@ -345,8 +316,8 @@ public class ServiceImplementation(
             await RemoveItemFromFetch(datasetVersion, filePath);
         }
 
-        // Update manifest
-        await AddOrUpdateManifestItem(datasetVersion, new(filePath, checksum));
+        // Update payload manifest
+        await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
 
         result.Id = filePath;
         result.ContentSize = bytesRead;
@@ -383,7 +354,7 @@ public class ServiceImplementation(
         string filePath)
     {
         await storageService.DeleteFile(GetFullFilePath(datasetVersion, filePath));
-        await RemoveItemFromManifest(datasetVersion, filePath);
+        await RemoveItemFromPayloadManifest(datasetVersion, filePath);
         await RemoveItemFromFetch(datasetVersion, filePath);
     }
 
@@ -434,17 +405,13 @@ public class ServiceImplementation(
         // Checksums and fetch can potentially be changed while processing this request,
         // leading to returning faulty checksums and other problems.
 
-        var payloadChecksums = await LoadManifest(datasetVersion, true);
-        var tagChecksums = await LoadManifest(datasetVersion, false);
+        var payloadManifest = await LoadManifest(datasetVersion, true);
         var fetch = await LoadFetch(datasetVersion);
 
-        string? GetChecksum(string filePath)
-        {
-            var manifest = IsDataFile(filePath) ? payloadChecksums : tagChecksums;
-            return manifest.TryGetItem(filePath, out var value) ? Convert.ToHexString(value.Checksum) : null;
-        }
+        string? GetChecksum(string filePath) =>
+            payloadManifest.TryGetItem(filePath, out var value) ? Convert.ToHexString(value.Checksum) : null;
 
-        await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
+        await foreach (var file in ListPayloadFiles(datasetVersion))
         {
             file.Sha256 = GetChecksum(file.Id);
             file.Id = StripFileTypePrefix(file.Id);
@@ -468,11 +435,9 @@ public class ServiceImplementation(
         DatasetVersionIdentifier datasetVersion, string[] paths)
     {
         var payloadManifest = await LoadManifest(datasetVersion, true);
-        var tagManifest = await LoadManifest(datasetVersion, false);
         var fetch = await LoadFetch(datasetVersion);
 
-        foreach (var filePath in
-            payloadManifest.Items.Concat(tagManifest.Items).Select(i => i.FilePath))
+        foreach (var filePath in payloadManifest.Items.Select(i => i.FilePath))
         {
             if (paths.Length > 0 && !paths.Any(filePath.StartsWith))
             {
@@ -528,7 +493,7 @@ public class ServiceImplementation(
             }
         }
 
-        return type.ToString() + '/' + filePath;
+        return "data/" + type.ToString() + '/' + filePath;
     }
 
     private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion) =>
@@ -560,13 +525,13 @@ public class ServiceImplementation(
 
     private static bool TryGetFileType(string filePath, out FileTypeEnum type)
     {
-        if (filePath.StartsWith("data/"))
+        if (filePath.StartsWith("data/data/"))
         {
             type = FileTypeEnum.data;
             return true;
         }
 
-        if (filePath.StartsWith("documentation/"))
+        if (filePath.StartsWith("data/documentation/"))
         {
             type = FileTypeEnum.documentation;
             return true;
@@ -576,18 +541,14 @@ public class ServiceImplementation(
         return false;
     }
 
-    private static bool IsDataFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.data;
-
-    private static bool IsDocumentationFile(string filePath) => TryGetFileType(filePath, out var type) && type == FileTypeEnum.documentation;
-
     private static string StripFileTypePrefix(string filePath)
     {
         if (TryGetFileType(filePath, out var type))
         {
             return type switch
             {
-                FileTypeEnum.data => filePath["data/".Length..],
-                FileTypeEnum.documentation => filePath["documentation/".Length..],
+                FileTypeEnum.data => filePath["data/data/".Length..],
+                FileTypeEnum.documentation => filePath["data/documentation/".Length..],
                 _ => filePath
             };
         };
@@ -637,33 +598,33 @@ public class ServiceImplementation(
         return await BagItInfo.Parse(data.Stream);
     }
 
-    private Task AddOrUpdateManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item) =>
-        LockAndUpdateManifest(datasetVersion, IsDataFile(item.FilePath), manifest => manifest.AddOrUpdateItem(item));
+    private Task AddOrUpdatePayloadManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item) =>
+        LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.AddOrUpdateItem(item));
 
     private Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item) =>
         LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item));
 
-    private Task RemoveItemFromManifest(DatasetVersionIdentifier datasetVersion, string filePath) =>
-        LockAndUpdateManifest(datasetVersion, IsDataFile(filePath), manifest => manifest.RemoveItem(filePath));
+    private Task RemoveItemFromPayloadManifest(DatasetVersionIdentifier datasetVersion, string filePath) =>
+        LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.RemoveItem(filePath));
 
     private Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath) =>
         LockAndUpdateFetch(datasetVersion, fetch => fetch.RemoveItem(filePath));
 
-    private async Task LockAndUpdateManifest(DatasetVersionIdentifier datasetVersion, bool payload, Func<BagItManifest, bool> action)
+    private async Task LockAndUpdatePayloadManifest(DatasetVersionIdentifier datasetVersion, Func<BagItManifest, bool> action)
     {
         // This method assumes that datasetVersion is not locked for writing,
         // i.e. that it is called "within" a file lock.
 
-        string manifestFilePath = GetManifestFileName(payload);
+        string manifestFilePath = GetManifestFileName(true);
         await lockService.LockFilePath(datasetVersion, manifestFilePath);
 
         try
         {
-            var manifest = await LoadManifest(datasetVersion, payload);
+            var manifest = await LoadManifest(datasetVersion, true);
 
             if (action(manifest))
             {
-                await StoreManifest(datasetVersion, payload, manifest);
+                await StoreManifest(datasetVersion, true, manifest);
             }
         }
         finally
@@ -728,11 +689,11 @@ public class ServiceImplementation(
         return GetFullFilePath(datasetVersion, filePath);
     }
 
-    private async IAsyncEnumerable<RoCrateFile> ListFilesForDatasetVersion(DatasetVersionIdentifier datasetVersion)
+    private async IAsyncEnumerable<RoCrateFile> ListPayloadFiles(DatasetVersionIdentifier datasetVersion)
     {
         string path = GetDatasetVersionPath(datasetVersion);
 
-        await foreach (var file in storageService.ListFiles(path))
+        await foreach (var file in storageService.ListFiles(path + "/data/"))
         {
             file.Id = file.Id[(path.Length + 1)..];
 
