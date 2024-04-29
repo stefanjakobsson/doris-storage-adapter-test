@@ -4,6 +4,7 @@ using DatasetFileUpload.Models.BagIt;
 using DatasetFileUpload.Services.Exceptions;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
+using Microsoft.Extensions.Options;
 using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
@@ -18,10 +19,13 @@ namespace DatasetFileUpload.Services;
 
 public class ServiceImplementation(
     IStorageService storageService,
-    ILockService lockService)
+    ILockService lockService,
+    IOptions<GeneralConfiguration> generalConfiguration)
 {
     private readonly IStorageService storageService = storageService;
     private readonly ILockService lockService = lockService;
+
+    private readonly GeneralConfiguration generalConfiguration = generalConfiguration.Value;
 
     private const string payloadManifestSha256FileName = "manifest-sha256.txt";
     private const string tagManifestSha256FileName = "tagmanifest-sha256.txt";
@@ -322,17 +326,15 @@ public class ServiceImplementation(
         // Update payload manifest
         await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
 
-        return new()
+        return ToRoCrateFile(new()
         {
-            Id = result.Path,
-            AdditionalType = type,
-            ContentSize = bytesRead,
+            Path = filePath,
+            Size = bytesRead,
+            ContentType = result.ContentType,
             DateCreated = result.DateCreated,
-            DateModified = result.DateModified,
-            EncodingFormat = result.ContentType,
-            Sha256 = Convert.ToHexString(checksum),
-            Url = null
-        };
+            DateModified = result.DateModified       
+        }, 
+        type, checksum);
     }
 
     public async Task DeleteFile(
@@ -417,24 +419,13 @@ public class ServiceImplementation(
         var payloadManifest = await LoadManifest(datasetVersion, true);
         var fetch = await LoadFetch(datasetVersion);
 
-        string? GetChecksum(string filePath) =>
-            payloadManifest.TryGetItem(filePath, out var value) ? Convert.ToHexString(value.Checksum) : null;
+        byte[]? GetChecksum(string filePath) =>
+            payloadManifest.TryGetItem(filePath, out var value) ? value.Checksum : null;
 
         await foreach (var file in ListPayloadFiles(datasetVersion))
         {
             TryGetFileType(file.Path, out var type);
-
-            yield return new()
-            {
-                Id = StripFileTypePrefix(file.Path),
-                AdditionalType = type,
-                ContentSize = file.Size,
-                DateCreated = file.DateCreated,
-                DateModified = file.DateModified,
-                EncodingFormat = file.ContentType,
-                Sha256 = GetChecksum(file.Path),
-                Url = null
-            };
+            yield return ToRoCrateFile(file, type, GetChecksum(file.Path));
         }
 
         foreach (var file in fetch.Items)
@@ -443,8 +434,9 @@ public class ServiceImplementation(
             {
                 Id = StripFileTypePrefix(file.FilePath),
                 AdditionalType = TryGetFileType(file.FilePath, out var type) ? type : default,
-                ContentSize = file.Length == null ? 0 : file.Length.Value,
-                Sha256 = GetChecksum(file.FilePath)
+                ContentSize = file.Length == null ? "0" : file.Length.Value.ToString(),
+                EncodingFormat = MimeTypes.GetMimeType(file.FilePath),
+                //Sha256 = GetChecksum(file.FilePath)
             };
         }
     }
@@ -512,7 +504,7 @@ public class ServiceImplementation(
             }
         }
 
-        return "data/" + type.ToString() + '/' + filePath;
+        return "data/" + type + '/' + filePath;
     }
 
     private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion) =>
@@ -580,6 +572,23 @@ public class ServiceImplementation(
 
     private static string DecodeUrlEncodedPath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
+
+    private RoCrateFile ToRoCrateFile(StorageServiceFile file, FileTypeEnum type, byte[]? sha256)        
+    {
+        string path = StripFileTypePrefix(file.Path);
+
+        return new()
+        {
+            Id = UrlEncodePath(path),
+            AdditionalType = type,
+            ContentSize = file.Size.ToString(),
+            DateCreated = file.DateCreated,
+            DateModified = file.DateModified,
+            EncodingFormat = file.ContentType ?? MimeTypes.GetMimeType(file.Path),
+            Sha256 = sha256 == null ? null : Convert.ToHexString(sha256),
+            Url = new Uri(new Uri(generalConfiguration.PublicUrl), "file/" + type + "?filePath=" + Uri.EscapeDataString(path))
+        };
+    }
 
     private async Task<BagItManifest> LoadManifest(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
     {
@@ -698,7 +707,7 @@ public class ServiceImplementation(
         return storageService.DeleteFile(filePath);
     }
 
-    private Task<StorageServiceFile> StoreBagInfo(DatasetVersionIdentifier datasetVersion, byte[] contents)
+    private Task<StorageServiceFileBase> StoreBagInfo(DatasetVersionIdentifier datasetVersion, byte[] contents)
     {
         string filePath = GetBagInfoFilePath(datasetVersion);
 

@@ -6,7 +6,7 @@ namespace DatasetFileUpload.Services.Storage;
 
 public interface IStorageService
 {
-    Task<StorageServiceFile> StoreFile(string filePath, StreamWithLength data, string? contentType);
+    Task<StorageServiceFileBase> StoreFile(string filePath, StreamWithLength data, string? contentType);
 
     Task DeleteFile(string filePath);
 

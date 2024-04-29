@@ -15,7 +15,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
   
-    public async Task<StorageServiceFile> StoreFile(string filePath, StreamWithLength data, string? contentType)
+    public async Task<StorageServiceFileBase> StoreFile(string filePath, StreamWithLength data, string? contentType)
     {
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
@@ -53,10 +53,8 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
             fileInfo.CreationTimeUtc = dateCreated.Value;
         }
 
-        return new StorageServiceFile
+        return new()
         {
-            Path = NormalizePath(Path.GetRelativePath(basePath, filePath)),
-            Size = fileInfo.Length,
             DateCreated = dateCreated ?? fileInfo.CreationTimeUtc,
             DateModified = fileInfo.LastWriteTimeUtc,
             ContentType = null

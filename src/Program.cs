@@ -22,6 +22,7 @@ using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,11 +39,13 @@ builder.Services.AddOptionsWithValidateOnStart<FileSystemStorageServiceConfigura
     .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
     .ValidateDataAnnotations();
 
-builder.Services.AddControllers().AddJsonOptions(options =>
-    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+static void SetupJsonSerializer(JsonSerializerOptions options)
+{
+    options.Converters.Add(new JsonStringEnumConverter());
+}
 
-builder.Services.ConfigureHttpJsonOptions(options =>
-   options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddControllers().AddJsonOptions(options => SetupJsonSerializer(options.JsonSerializerOptions));
+builder.Services.ConfigureHttpJsonOptions(options => SetupJsonSerializer(options.SerializerOptions));
 
 // Map ApiExceptions to problem details response
 builder.Services.AddProblemDetails(options =>

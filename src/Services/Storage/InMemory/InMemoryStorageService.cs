@@ -9,7 +9,7 @@ internal class InMemoryStorageService : IStorageService
 {
     private readonly Dictionary<string, InMemoryFile> files = [];
 
-    public async Task<StorageServiceFile> StoreFile(string filePath, StreamWithLength data, string? contentType)
+    public async Task<StorageServiceFileBase> StoreFile(string filePath, StreamWithLength data, string? contentType)
     {
         using var memoryStream = new MemoryStream();
         await data.Stream.CopyToAsync(memoryStream);
