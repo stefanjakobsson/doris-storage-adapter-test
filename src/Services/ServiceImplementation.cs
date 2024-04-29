@@ -246,7 +246,7 @@ public class ServiceImplementation(
         try
         {
             await ThrowIfHasBeenPublished(datasetVersion);
-            return await StoreFileImpl(datasetVersion, type, filePath, data, contentType);
+            return await StoreFileImpl(datasetVersion, filePath, data, contentType);
         }
         finally
         {
@@ -256,7 +256,6 @@ public class ServiceImplementation(
 
     private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
-        FileTypeEnum type,
         string filePath,
         StreamWithLength data,
         string? contentType)
@@ -332,9 +331,9 @@ public class ServiceImplementation(
             Size = bytesRead,
             ContentType = result.ContentType,
             DateCreated = result.DateCreated,
-            DateModified = result.DateModified       
-        }, 
-        type, checksum);
+            DateModified = result.DateModified
+        },
+        checksum);
     }
 
     public async Task DeleteFile(
@@ -422,22 +421,34 @@ public class ServiceImplementation(
         byte[]? GetChecksum(string filePath) =>
             payloadManifest.TryGetItem(filePath, out var value) ? value.Checksum : null;
 
-        await foreach (var file in ListPayloadFiles(datasetVersion))
+        string datasetPath = GetDatasetPath(datasetVersion);
+        string datasetVersionPath = GetDatasetVersionPath(datasetVersion);
+
+        var dict = new Dictionary<string, StorageServiceFile>();
+        var currentVersionFiles = new List<StorageServiceFile>();
+
+        await foreach (var file in storageService.ListFiles(datasetPath))
         {
-            TryGetFileType(file.Path, out var type);
-            yield return ToRoCrateFile(file, type, GetChecksum(file.Path));
+            if (file.Path.StartsWith(datasetVersionPath + "data/"))
+            {
+                currentVersionFiles.Add(file with { Path = file.Path[datasetVersionPath.Length..] });
+            }
+            else
+            {
+                dict[file.Path] = file;
+            }
         }
 
-        foreach (var file in fetch.Items)
+        foreach (var item in fetch.Items)
         {
-            yield return new()
-            {
-                Id = StripFileTypePrefix(file.FilePath),
-                AdditionalType = TryGetFileType(file.FilePath, out var type) ? type : default,
-                ContentSize = file.Length == null ? "0" : file.Length.Value.ToString(),
-                EncodingFormat = MimeTypes.GetMimeType(file.FilePath),
-                //Sha256 = GetChecksum(file.FilePath)
-            };
+            yield return ToRoCrateFile(
+                dict[datasetPath + DecodeUrlEncodedPath(item.Url[3..])] with { Path = item.FilePath }, 
+                GetChecksum(item.FilePath));
+        }
+
+        foreach (var file in currentVersionFiles)
+        {
+            yield return ToRoCrateFile(file, GetChecksum(file.Path));
         }
     }
 
@@ -458,9 +469,9 @@ public class ServiceImplementation(
             string actualFilePath = GetActualFilePath(datasetVersion, fetch, filePath);
             var data = await storageService.GetFileData(actualFilePath);
 
-            if (data != null && TryGetFileType(filePath, out var type))
+            if (data != null)
             {
-                yield return (type, StripFileTypePrefix(filePath), data);
+                yield return (GetFileType(filePath), StripFileTypePrefix(filePath), data);
             }
         }
 
@@ -508,16 +519,16 @@ public class ServiceImplementation(
     }
 
     private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion) =>
-        datasetVersion.DatasetIdentifier;
+        datasetVersion.DatasetIdentifier + '/';
 
     private static string GetVersionPath(DatasetVersionIdentifier datasetVersion) =>
         datasetVersion.DatasetIdentifier + '-' + datasetVersion.VersionNumber;
 
     private static string GetDatasetVersionPath(DatasetVersionIdentifier datasetVersion) =>
-        GetDatasetPath(datasetVersion) + '/' + GetVersionPath(datasetVersion);
+        GetDatasetPath(datasetVersion) + GetVersionPath(datasetVersion) + '/';
 
     private static string GetFullFilePath(DatasetVersionIdentifier datasetVersion, string filePath) =>
-        GetDatasetVersionPath(datasetVersion) + '/' + filePath;
+        GetDatasetVersionPath(datasetVersion) + filePath;
 
     private static string GetManifestFileName(bool payload) =>
         payload ? payloadManifestSha256FileName : tagManifestSha256FileName;
@@ -534,38 +545,28 @@ public class ServiceImplementation(
     private static string GetBagItFilePath(DatasetVersionIdentifier datasetVersion) =>
         GetFullFilePath(datasetVersion, bagItFileName);
 
-    private static bool TryGetFileType(string filePath, out FileTypeEnum type)
+    private static FileTypeEnum GetFileType(string filePath)
     {
         if (filePath.StartsWith("data/data/"))
         {
-            type = FileTypeEnum.data;
-            return true;
+            return FileTypeEnum.data;
         }
 
         if (filePath.StartsWith("data/documentation/"))
         {
-            type = FileTypeEnum.documentation;
-            return true;
+            return FileTypeEnum.documentation;
         }
 
-        type = default;
-        return false;
+        return default;
     }
 
-    private static string StripFileTypePrefix(string filePath)
-    {
-        if (TryGetFileType(filePath, out var type))
+    private static string StripFileTypePrefix(string filePath) =>
+        GetFileType(filePath) switch
         {
-            return type switch
-            {
-                FileTypeEnum.data => filePath["data/data/".Length..],
-                FileTypeEnum.documentation => filePath["data/documentation/".Length..],
-                _ => filePath
-            };
+            FileTypeEnum.data => filePath["data/data/".Length..],
+            FileTypeEnum.documentation => filePath["data/documentation/".Length..],
+            _ => filePath
         };
-
-        return filePath;
-    }
 
     private static string UrlEncodePath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
@@ -573,9 +574,10 @@ public class ServiceImplementation(
     private static string DecodeUrlEncodedPath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
 
-    private RoCrateFile ToRoCrateFile(StorageServiceFile file, FileTypeEnum type, byte[]? sha256)        
+    private RoCrateFile ToRoCrateFile(StorageServiceFile file, byte[]? sha256)
     {
         string path = StripFileTypePrefix(file.Path);
+        var type = GetFileType(file.Path);
 
         return new()
         {
@@ -718,7 +720,7 @@ public class ServiceImplementation(
     {
         if (fetch.TryGetItem(filePath, out var fetchItem))
         {
-            return GetDatasetPath(datasetVersion) + DecodeUrlEncodedPath(fetchItem.Url[2..]);
+            return GetDatasetPath(datasetVersion) + DecodeUrlEncodedPath(fetchItem.Url[3..]);
         }
 
         return GetFullFilePath(datasetVersion, filePath);
@@ -728,9 +730,9 @@ public class ServiceImplementation(
     {
         string path = GetDatasetVersionPath(datasetVersion);
 
-        await foreach (var file in storageService.ListFiles(path + "/data/"))
+        await foreach (var file in storageService.ListFiles(path + "data/"))
         {
-            yield return file with { Path = file.Path[(path.Length + 1)..] };
+            yield return file with { Path = file.Path[path.Length..] };
         }
     }
 
