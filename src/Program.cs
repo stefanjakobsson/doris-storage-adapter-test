@@ -41,6 +41,9 @@ builder.Services.AddOptionsWithValidateOnStart<FileSystemStorageServiceConfigura
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+   options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
 // Map ApiExceptions to problem details response
 builder.Services.AddProblemDetails(options =>
 {

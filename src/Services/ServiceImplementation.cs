@@ -85,9 +85,9 @@ public class ServiceImplementation(
 
         await foreach (var file in ListPayloadFiles(previousVersion))
         {
-            if (!fetch.Contains(file.Id))
+            if (!fetch.Contains(file.Path))
             {
-                newFetch.AddOrUpdateItem(new(file.Id, file.ContentSize, previousVersionUrl + UrlEncodePath(file.Id)));
+                newFetch.AddOrUpdateItem(new(file.Path, file.Size, previousVersionUrl + UrlEncodePath(file.Path)));
             }
         }
 
@@ -138,7 +138,7 @@ public class ServiceImplementation(
         long octetCount = 0;
         await foreach (var file in ListPayloadFiles(datasetVersion))
         {
-            octetCount += file.ContentSize;
+            octetCount += file.Size;
         }
         foreach (var item in fetch?.Fetch?.Items ?? [])
         {
@@ -252,6 +252,7 @@ public class ServiceImplementation(
 
     private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
+        FileTypeEnum type,
         string filePath,
         StreamWithLength data,
         string? contentType)
@@ -326,8 +327,8 @@ public class ServiceImplementation(
             Id = result.Path,
             AdditionalType = type,
             ContentSize = bytesRead,
-            DateCreated = result.DateCreated ?? DateTime.UtcNow,
-            DateModified = result.DateModified ?? DateTime.UtcNow,
+            DateCreated = result.DateCreated,
+            DateModified = result.DateModified,
             EncodingFormat = result.ContentType,
             Sha256 = Convert.ToHexString(checksum),
             Url = null
@@ -421,10 +422,18 @@ public class ServiceImplementation(
 
         await foreach (var file in ListPayloadFiles(datasetVersion))
         {
-            yield return file with
+            TryGetFileType(file.Path, out var type);
+
+            yield return new()
             {
-                Id = StripFileTypePrefix(file.Id),
-                Sha256 = GetChecksum(file.Id)
+                Id = StripFileTypePrefix(file.Path),
+                AdditionalType = type,
+                ContentSize = file.Size,
+                DateCreated = file.DateCreated,
+                DateModified = file.DateModified,
+                EncodingFormat = file.ContentType,
+                Sha256 = GetChecksum(file.Path),
+                Url = null
             };
         }
 
@@ -706,22 +715,13 @@ public class ServiceImplementation(
         return GetFullFilePath(datasetVersion, filePath);
     }
 
-    private async IAsyncEnumerable<RoCrateFile> ListPayloadFiles(DatasetVersionIdentifier datasetVersion)
+    private async IAsyncEnumerable<StorageServiceFile> ListPayloadFiles(DatasetVersionIdentifier datasetVersion)
     {
         string path = GetDatasetVersionPath(datasetVersion);
 
         await foreach (var file in storageService.ListFiles(path + "/data/"))
         {
-            string id = file.Id[(path.Length + 1)..];
-
-            if (TryGetFileType(id, out var fileType))
-            {
-                yield return file with
-                {
-                    Id = id,
-                    AdditionalType = fileType
-                };
-            }
+            yield return file with { Path = file.Path[(path.Length + 1)..] };
         }
     }
 

@@ -52,7 +52,6 @@ public class FileController(
         return TypedResults.Ok(result);
     }
 
-
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     [EnableCors(nameof(DeleteFile))]

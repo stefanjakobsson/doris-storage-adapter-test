@@ -1,4 +1,3 @@
-using DatasetFileUpload.Models;
 using DatasetFileUpload.Services.Exceptions;
 using Microsoft.Extensions.Options;
 using System;
@@ -38,16 +37,28 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
             Directory.CreateDirectory(directoryPath);
         }
 
+        var fileInfo = new FileInfo(filePath);
+
+        DateTime? dateCreated = null;
+        if (fileInfo.Exists)
+        {
+            dateCreated = fileInfo.CreationTimeUtc;
+        }
+
         File.Move(tempFile, filePath, true);
 
-        var fileInfo = new FileInfo(filePath);
+        fileInfo.Refresh();
+        if (dateCreated != null)
+        {
+            fileInfo.CreationTimeUtc = dateCreated.Value;
+        }
 
         return new StorageServiceFile
         {
             Path = NormalizePath(Path.GetRelativePath(basePath, filePath)),
             Size = fileInfo.Length,
-            DateCreated = fileInfo.CreationTime.ToUniversalTime(),
-            DateModified = fileInfo.LastWriteTime.ToUniversalTime(),
+            DateCreated = dateCreated ?? fileInfo.CreationTimeUtc,
+            DateModified = fileInfo.LastWriteTimeUtc,
             ContentType = null
         };
     }
@@ -131,8 +142,8 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
             {
                 Path = NormalizePath(relativePath),
                 Size = file.Length,
-                DateCreated = file.CreationTime.ToUniversalTime(),
-                DateModified = file.LastWriteTime.ToUniversalTime(),
+                DateCreated = file.CreationTimeUtc,
+                DateModified = file.LastWriteTimeUtc,
                 ContentType = null
             };
         }
