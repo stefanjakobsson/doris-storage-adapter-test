@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -8,7 +9,7 @@ namespace DatasetFileUpload.Models.BagIt;
 
 public class BagItFetch
 {
-    private readonly Dictionary<string, BagItFetchItem> items = [];
+    private readonly SortedDictionary<string, BagItFetchItem> items = new(StringComparer.InvariantCulture);
 
     public static async Task<BagItFetch> Parse(Stream stream)
     {

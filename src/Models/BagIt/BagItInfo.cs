@@ -10,7 +10,7 @@ namespace DatasetFileUpload.Models.BagIt;
 
 public class BagItInfo
 {
-    private readonly Dictionary<string, List<BagItInfoItem>> items = [];
+    private readonly SortedDictionary<string, List<BagItInfoItem>> items = new(StringComparer.InvariantCulture);
 
     private const string baggingDateLabel = "Bagging-Date";
     private const string bagSizeLabel = "Bag-Size";

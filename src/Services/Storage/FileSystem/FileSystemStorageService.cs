@@ -131,8 +131,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
 
         path = GetPathOrThrow(path, basePath);
 
-        foreach (var file in EnumerateFiles(path)
-            .OrderBy(f => f.FullName, StringComparer.InvariantCulture))
+        foreach (var file in EnumerateFiles(path))
         {
             var relativePath = Path.GetRelativePath(basePath, file.FullName);
 

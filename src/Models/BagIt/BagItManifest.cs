@@ -9,7 +9,7 @@ namespace DatasetFileUpload.Models.BagIt;
 
 public class BagItManifest
 {
-    private readonly Dictionary<string, BagItManifestItem> items = [];
+    private readonly SortedDictionary<string, BagItManifestItem> items = new(StringComparer.InvariantCulture);
     private readonly Dictionary<byte[], List<BagItManifestItem>> checksumToItems = new(ByteArrayComparer.Default);
 
     public static async Task<BagItManifest> Parse(Stream stream)

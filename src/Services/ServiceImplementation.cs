@@ -422,31 +422,35 @@ public class ServiceImplementation(
             payloadManifest.TryGetItem(filePath, out var value) ? value.Checksum : null;
 
         string datasetPath = GetDatasetPath(datasetVersion);
-        string datasetVersionPath = GetDatasetVersionPath(datasetVersion);
+        var result = new List<StorageServiceFile>();
 
-        var dict = new Dictionary<string, StorageServiceFile>();
-        var currentVersionFiles = new List<StorageServiceFile>();
-
-        await foreach (var file in storageService.ListFiles(datasetPath))
+        string previousPayloadPath = "";
+        Dictionary<string, StorageServiceFile> dict = [];
+        foreach (var item in fetch.Items.OrderBy(i => i.Url, StringComparer.Ordinal))
         {
-            if (file.Path.StartsWith(datasetVersionPath + "data/"))
+            string path = datasetPath + DecodeUrlEncodedPath(item.Url[3..]);
+            string payloadPath = path[..(path.IndexOf("/data/") + 6)];
+
+            if (payloadPath != previousPayloadPath)
             {
-                currentVersionFiles.Add(file with { Path = file.Path[datasetVersionPath.Length..] });
+                dict = [];
+                await foreach (var file in storageService.ListFiles(payloadPath))
+                {
+                    dict[file.Path] = file;
+                }
             }
-            else
-            {
-                dict[file.Path] = file;
-            }
+
+            result.Add(dict[path] with { Path = item.FilePath });
+
+            previousPayloadPath = payloadPath;
         }
 
-        foreach (var item in fetch.Items)
+        await foreach (var file in ListPayloadFiles(datasetVersion))
         {
-            yield return ToRoCrateFile(
-                dict[datasetPath + DecodeUrlEncodedPath(item.Url[3..])] with { Path = item.FilePath }, 
-                GetChecksum(item.FilePath));
+            result.Add(file);
         }
 
-        foreach (var file in currentVersionFiles)
+        foreach (var file in result.OrderBy(f => f.Path, StringComparer.InvariantCulture))
         {
             yield return ToRoCrateFile(file, GetChecksum(file.Path));
         }
