@@ -27,14 +27,12 @@ internal class InMemoryStorageService : IStorageService
         }
         else
         {
-            file = new(new()
-            {
-                Path = filePath,
-                DateCreated = DateTime.UtcNow,
-                DateModified = DateTime.UtcNow,
-                ContentType = contentType,
-                Size = data.Length
-            },
+            file = new(new(
+                ContentType: contentType,
+                DateCreated: DateTime.UtcNow,
+                DateModified: DateTime.UtcNow,
+                Path: filePath,
+                Size: data.Length),
             byteArray);
 
             files[filePath] = file;

@@ -2,9 +2,7 @@
 
 namespace DatasetFileUpload.Services.Storage;
 
-public record StorageServiceFileBase
-{
-    public DateTime? DateCreated { get; init; }
-    public DateTime? DateModified { get; init; }
-    public string? ContentType { get; init; }
-}
+public record StorageServiceFileBase(
+    string? ContentType,
+    DateTime? DateCreated,
+    DateTime? DateModified);

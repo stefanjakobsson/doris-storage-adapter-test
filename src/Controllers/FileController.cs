@@ -108,7 +108,7 @@ public class FileController(
 
         Response.Headers.ContentLength = fileData.Length;
 
-        return TypedResults.Stream(fileData.Stream, "application/octet-stream", filePath);
+        return TypedResults.Stream(fileData.Stream, "application/octet-stream", filePath.Split('/').Last());
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]

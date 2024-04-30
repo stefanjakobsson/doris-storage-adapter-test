@@ -15,5 +15,5 @@ public record RoCrateFile
     public DateTime? DateModified { get; init; }
     public required string EncodingFormat { get; init; }
     public string? Sha256 { get; init; }
-    public Uri? Url { get; init; }
+    public required Uri Url { get; init; }
 }

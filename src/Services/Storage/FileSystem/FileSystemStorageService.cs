@@ -53,12 +53,10 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
             fileInfo.CreationTimeUtc = dateCreated.Value;
         }
 
-        return new()
-        {
-            DateCreated = dateCreated ?? fileInfo.CreationTimeUtc,
-            DateModified = fileInfo.LastWriteTimeUtc,
-            ContentType = null
-        };
+        return new(
+            ContentType: null,
+            DateCreated: dateCreated ?? fileInfo.CreationTimeUtc,
+            DateModified: fileInfo.LastWriteTimeUtc);
     }
 
     public Task DeleteFile(string filePath)
@@ -135,14 +133,12 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         {
             var relativePath = Path.GetRelativePath(basePath, file.FullName);
 
-            yield return new()
-            {
-                Path = NormalizePath(relativePath),
-                Size = file.Length,
-                DateCreated = file.CreationTimeUtc,
-                DateModified = file.LastWriteTimeUtc,
-                ContentType = null
-            };
+            yield return new(
+                ContentType: null,
+                DateCreated: file.CreationTimeUtc,
+                DateModified: file.LastWriteTimeUtc,
+                Path: NormalizePath(relativePath),
+                Size: file.Length);
         }
     }
 

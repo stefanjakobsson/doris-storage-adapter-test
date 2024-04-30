@@ -136,6 +136,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
         policy.WithMethods(HttpMethods.Get);
+        policy.WithExposedHeaders(HeaderNames.ContentDisposition);
     });
     options.AddPolicy(nameof(FileController.GetFileDataAsZip), policy =>
     {

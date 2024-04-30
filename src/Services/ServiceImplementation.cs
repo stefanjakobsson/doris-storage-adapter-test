@@ -325,14 +325,12 @@ public class ServiceImplementation(
         // Update payload manifest
         await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
 
-        return ToRoCrateFile(new()
-        {
-            Path = filePath,
-            Size = bytesRead,
-            ContentType = result.ContentType,
-            DateCreated = result.DateCreated,
-            DateModified = result.DateModified
-        },
+        return ToRoCrateFile(new(
+            ContentType: result.ContentType,
+            DateCreated: result.DateCreated,
+            DateModified: result.DateModified,
+            Path: filePath,
+            Size: bytesRead),
         checksum);
     }
 
