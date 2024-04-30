@@ -9,7 +9,7 @@ internal class InMemoryStorageService : IStorageService
 {
     private readonly Dictionary<string, InMemoryFile> files = [];
 
-    public async Task<StorageServiceFileBase> StoreFile(string filePath, StreamWithLength data, string? contentType)
+    public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
         using var memoryStream = new MemoryStream();
         await data.Stream.CopyToAsync(memoryStream);
@@ -20,19 +20,19 @@ internal class InMemoryStorageService : IStorageService
             file.Data = byteArray;
             file.Metadata = file.Metadata with
             {
+                ContentType = data.ContentType,
                 DateModified = DateTime.UtcNow,
-                Size = byteArray.LongLength,
-                ContentType = contentType
+                Length = byteArray.LongLength
             };
         }
         else
         {
             file = new(new(
-                ContentType: contentType,
+                ContentType: data.ContentType,
                 DateCreated: DateTime.UtcNow,
                 DateModified: DateTime.UtcNow,
-                Path: filePath,
-                Size: data.Length),
+                Length: data.Length,
+                Path: filePath),
             byteArray);
 
             files[filePath] = file;
@@ -47,14 +47,15 @@ internal class InMemoryStorageService : IStorageService
         return Task.CompletedTask;
     }
 
-    public Task<StreamWithLength?> GetFileData(string filePath)
+    public Task<FileData?> GetFileData(string filePath)
     {
         if (files.TryGetValue(filePath, out var file))
         {
-            return Task.FromResult<StreamWithLength?>(new(new MemoryStream(file.Data), file.Data.LongLength));
+            return Task.FromResult<FileData?>(new(
+                new MemoryStream(file.Data), file.Data.LongLength, file.Metadata.ContentType));
         }
 
-        return Task.FromResult<StreamWithLength?>(null);
+        return Task.FromResult<FileData?>(null);
     }
 
     public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)

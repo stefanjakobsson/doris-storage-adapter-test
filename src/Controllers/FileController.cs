@@ -47,7 +47,10 @@ public class FileController(
         }
 
         var result = await appService.StoreFile(
-            datasetVersion, type, filePath, new(Request.Body, Request.Headers.ContentLength.Value), Request.Headers.ContentType);
+            datasetVersion, type, filePath, new(
+                Stream: Request.Body, 
+                Length: Request.Headers.ContentLength.Value, 
+                ContentType: Request.Headers.ContentType));
 
         return TypedResults.Ok(result);
     }
@@ -108,7 +111,7 @@ public class FileController(
 
         Response.Headers.ContentLength = fileData.Length;
 
-        return TypedResults.Stream(fileData.Stream, "application/octet-stream", filePath.Split('/').Last());
+        return TypedResults.Stream(fileData.Stream, fileData.ContentType, filePath.Split('/').Last());
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]

@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage;
 
-public record StreamWithLength(Stream Stream, long Length) : IDisposable, IAsyncDisposable
+public record FileData(
+    Stream Stream, 
+    long Length,
+    string? ContentType) : IDisposable, IAsyncDisposable
 {
     public void Dispose()
     {

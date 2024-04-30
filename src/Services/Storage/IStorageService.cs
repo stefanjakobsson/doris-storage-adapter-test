@@ -6,11 +6,11 @@ namespace DatasetFileUpload.Services.Storage;
 
 public interface IStorageService
 {
-    Task<StorageServiceFileBase> StoreFile(string filePath, StreamWithLength data, string? contentType);
+    Task<StorageServiceFileBase> StoreFile(string filePath, FileData data);
 
     Task DeleteFile(string filePath);
 
-    Task<StreamWithLength?> GetFileData(string filePath);
+    Task<FileData?> GetFileData(string filePath);
 
     IAsyncEnumerable<StorageServiceFile> ListFiles(string path);
 }

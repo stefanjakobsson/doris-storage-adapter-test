@@ -15,7 +15,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
   
-    public async Task<StorageServiceFileBase> StoreFile(string filePath, StreamWithLength data, string? contentType)
+    public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
@@ -86,17 +86,17 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         return Task.CompletedTask;
     }
 
-    public Task<StreamWithLength?> GetFileData(string filePath)
+    public Task<FileData?> GetFileData(string filePath)
     {
         filePath = GetPathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
         {
-            return Task.FromResult<StreamWithLength?>(null);
+            return Task.FromResult<FileData?>(null);
         }
 
         var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        return Task.FromResult<StreamWithLength?>(new(stream, stream.Length));
+        return Task.FromResult<FileData?>(new(stream, stream.Length, null));
     }
 
     public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
@@ -138,7 +138,7 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
                 DateCreated: file.CreationTimeUtc,
                 DateModified: file.LastWriteTimeUtc,
                 Path: NormalizePath(relativePath),
-                Size: file.Length);
+                Length: file.Length);
         }
     }
 

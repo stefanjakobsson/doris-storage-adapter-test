@@ -7,5 +7,5 @@ public record StorageServiceFile(
     DateTime? DateCreated,
     DateTime? DateModified,
     string Path,
-    long Size
+    long Length
 ) : StorageServiceFileBase(ContentType, DateCreated, DateModified);

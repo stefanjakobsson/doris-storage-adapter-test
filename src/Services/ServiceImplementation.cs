@@ -58,7 +58,7 @@ public class ServiceImplementation(
             using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, true));
             if (fileData != null)
             {
-                await storageService.StoreFile(GetManifestFilePath(toVersion, true), fileData, "text/plain");
+                await storageService.StoreFile(GetManifestFilePath(toVersion, true), fileData);
             }
         }
 
@@ -91,7 +91,7 @@ public class ServiceImplementation(
         {
             if (!fetch.Contains(file.Path))
             {
-                newFetch.AddOrUpdateItem(new(file.Path, file.Size, previousVersionUrl + UrlEncodePath(file.Path)));
+                newFetch.AddOrUpdateItem(new(file.Path, file.Length, previousVersionUrl + UrlEncodePath(file.Path)));
             }
         }
 
@@ -142,7 +142,7 @@ public class ServiceImplementation(
         long octetCount = 0;
         await foreach (var file in ListPayloadFiles(datasetVersion))
         {
-            octetCount += file.Size;
+            octetCount += file.Length;
         }
         foreach (var item in fetch?.Fetch?.Items ?? [])
         {
@@ -183,7 +183,7 @@ public class ServiceImplementation(
 
         await StoreManifest(datasetVersion, false, tagManifest);
         await StoreBagInfo(datasetVersion, bagInfoContents);
-        await storageService.StoreFile(GetBagItFilePath(datasetVersion), CreateStreamFromByteArray(bagItContents), "text/plain");
+        await storageService.StoreFile(GetBagItFilePath(datasetVersion), CreateFileDataFromByteArray(bagItContents));
     }
 
     public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
@@ -233,8 +233,7 @@ public class ServiceImplementation(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
-        StreamWithLength data,
-        string? contentType)
+        FileData data)
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
@@ -246,7 +245,7 @@ public class ServiceImplementation(
         try
         {
             await ThrowIfHasBeenPublished(datasetVersion);
-            return await StoreFileImpl(datasetVersion, filePath, data, contentType);
+            return await StoreFileImpl(datasetVersion, filePath, data);
         }
         finally
         {
@@ -257,8 +256,7 @@ public class ServiceImplementation(
     private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
         string filePath,
-        StreamWithLength data,
-        string? contentType)
+        FileData data)
     {
         async Task<string?> Deduplicate(byte[] checksum)
         {
@@ -305,7 +303,7 @@ public class ServiceImplementation(
             bytesRead += e.Count;
         };
 
-        var result = await storageService.StoreFile(fullFilePath, data with { Stream = monitoringStream }, contentType);
+        var result = await storageService.StoreFile(fullFilePath, data with { Stream = monitoringStream });
 
         byte[] checksum = sha256.Hash!;
 
@@ -330,7 +328,7 @@ public class ServiceImplementation(
             DateCreated: result.DateCreated,
             DateModified: result.DateModified,
             Path: filePath,
-            Size: bytesRead),
+            Length: bytesRead),
         checksum);
     }
 
@@ -366,7 +364,7 @@ public class ServiceImplementation(
         await RemoveItemFromFetch(datasetVersion, filePath);
     }
 
-    public async Task<StreamWithLength?> GetFileData(
+    public async Task<FileData?> GetFileData(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
@@ -401,9 +399,14 @@ public class ServiceImplementation(
         }
 
         var fetch = await LoadFetch(datasetVersion);
-        filePath = GetActualFilePath(datasetVersion, fetch, filePath);
+        var result = await storageService.GetFileData(GetActualFilePath(datasetVersion, fetch, filePath));
 
-        return await storageService.GetFileData(filePath);
+        if (result != null && result.ContentType == null)
+        {
+            result = result with { ContentType = MimeTypes.GetMimeType(filePath) };
+        }
+
+        return result;
     }
 
     public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
@@ -455,7 +458,7 @@ public class ServiceImplementation(
     }
 
     // Change return type to class/record? Reuse return type from ListFiles?
-    public async IAsyncEnumerable<(FileTypeEnum Type, string FilePath, StreamWithLength Data)> GetFileDataByPaths(
+    public async IAsyncEnumerable<(FileTypeEnum Type, string FilePath, FileData Data)> GetFileDataByPaths(
         DatasetVersionIdentifier datasetVersion, string[] paths)
     {
         var payloadManifest = await LoadManifest(datasetVersion, true);
@@ -585,7 +588,7 @@ public class ServiceImplementation(
         {
             Id = UrlEncodePath(path),
             AdditionalType = type,
-            ContentSize = file.Size.ToString(),
+            ContentSize = file.Length.ToString(),
             DateCreated = file.DateCreated,
             DateModified = file.DateModified,
             EncodingFormat = file.ContentType ?? MimeTypes.GetMimeType(file.Path),
@@ -693,7 +696,7 @@ public class ServiceImplementation(
 
         if (manifest.Items.Any())
         {
-            return storageService.StoreFile(filePath, CreateStreamFromByteArray(manifest.Serialize()), "text/plain");
+            return storageService.StoreFile(filePath, CreateFileDataFromByteArray(manifest.Serialize()));
         }
 
         return storageService.DeleteFile(filePath);
@@ -705,7 +708,7 @@ public class ServiceImplementation(
 
         if (fetch.Items.Any())
         {
-            return storageService.StoreFile(filePath, CreateStreamFromByteArray(fetch.Serialize()), "text/plain");
+            return storageService.StoreFile(filePath, CreateFileDataFromByteArray(fetch.Serialize()));
         }
 
         return storageService.DeleteFile(filePath);
@@ -715,7 +718,7 @@ public class ServiceImplementation(
     {
         string filePath = GetBagInfoFilePath(datasetVersion);
 
-        return storageService.StoreFile(filePath, CreateStreamFromByteArray(contents), "text/plain");
+        return storageService.StoreFile(filePath, CreateFileDataFromByteArray(contents));
     }
 
     private static string GetActualFilePath(DatasetVersionIdentifier datasetVersion, BagItFetch fetch, string filePath)
@@ -738,7 +741,8 @@ public class ServiceImplementation(
         }
     }
 
-    private static StreamWithLength CreateStreamFromByteArray(byte[] data) => new(new MemoryStream(data), data.LongLength);
+    private static FileData CreateFileDataFromByteArray(byte[] data) => 
+        new(new MemoryStream(data), data.LongLength, "text/plain");
 
     private async Task<bool> VersionHasBeenPublished(DatasetVersionIdentifier datasetVersion)
     {
