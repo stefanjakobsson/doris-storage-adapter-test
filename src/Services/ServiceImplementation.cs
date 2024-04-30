@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -505,6 +506,33 @@ public class ServiceImplementation(
                 yield return (file.AdditionalType, StripTypePrefix(file.Id), data.Stream);
             }
         }*/
+    }
+
+    public async Task WriteFileDataAsZip(DatasetVersionIdentifier datasetVersion, string[] paths, Stream stream)
+    {
+        var payloadManifest = await LoadManifest(datasetVersion, true);
+        var fetch = await LoadFetch(datasetVersion);
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Create, false);
+
+        foreach (var filePath in payloadManifest.Items.Select(i => i.FilePath))
+        {
+            if (paths.Length > 0 && !paths.Any(filePath.StartsWith))
+            {
+                continue;
+            }
+
+            string actualFilePath = GetActualFilePath(datasetVersion, fetch, filePath);
+            var data = await storageService.GetFileData(actualFilePath);
+
+            if (data != null)
+            {
+                var entry = archive.CreateEntry(filePath[5..], CompressionLevel.NoCompression);
+                using var entryStream = entry.Open();
+                using var dataStream = data.Stream;
+                await dataStream.CopyToAsync(entryStream);
+            }
+        }
     }
 
 

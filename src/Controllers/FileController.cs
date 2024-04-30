@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
-using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -117,7 +116,7 @@ public class FileController(
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]
     [Authorize(Roles = Roles.ReadData)]
     [EnableCors(nameof(GetFileDataAsZip))]
-    public async Task<Results<Ok, ForbidHttpResult>> GetFileDataAsZip(
+    public Results<PushStreamHttpResult, ForbidHttpResult> GetFileDataAsZip(
         string datasetIdentifier,
         string versionNumber,
         [FromQuery] string[] path)
@@ -129,39 +128,11 @@ public class FileController(
             return TypedResults.Forbid();
         }
 
-        Response.ContentType = "application/zip";
-        Response.Headers.ContentDisposition = "attachment; filename=" + datasetIdentifier + "-" + versionNumber + ".zip";
+        // WriteFileDataAsZip or GetFileDataByPaths?
 
-        using var archive = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, false);
-
-        await foreach (var (type, filePath, data) in appService.GetFileDataByPaths(datasetVersion, path))
-        {
-            var entry = archive.CreateEntry(type.ToString() + '/' + filePath, CompressionLevel.NoCompression);
-            using var entryStream = entry.Open();
-            using var dataStream = data.Stream;
-            await dataStream.CopyToAsync(entryStream);
-        }
-
-        return TypedResults.Ok();
-
-        /*await foreach (var file in fileService.ListFiles(datasetVersion))
-        {
-            string filePath = file.AdditionalType.ToString().ToLowerInvariant() + '/' + file.Id;
-
-            if (path.Length > 0 && !path.Any(filePath.StartsWith))
-            {
-                continue;
-            }
-
-            var fileData = await fileService.GetData(datasetVersion, file.AdditionalType, file.Id);
-
-            if (fileData != null)
-            {
-                var entry = archive.CreateEntry(filePath, CompressionLevel.NoCompression);
-                using var entryStream = entry.Open();
-                await fileData.Stream.CopyToAsync(entryStream);
-            }
-        }*/
+        return TypedResults.Stream(_ => 
+            appService.WriteFileDataAsZip(datasetVersion, path, Response.BodyWriter.AsStream()), 
+            "application/zip", datasetIdentifier + "-" + versionNumber + ".zip");
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}")]
