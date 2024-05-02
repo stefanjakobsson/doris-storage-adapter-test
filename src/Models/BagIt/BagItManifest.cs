@@ -97,7 +97,6 @@ public class BagItManifest
         return false;
     }
 
-    // Maybe serialize to stream here instead?
     public byte[] Serialize()
     {
         var values = Items.Select(i => 

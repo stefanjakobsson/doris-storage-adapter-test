@@ -61,7 +61,6 @@ public class BagItFetch
 
     public bool RemoveItem(string filePath) => items.Remove(filePath);
 
-    // Maybe serialize to stream here instead?
     public byte[] Serialize()
     {
         var values = Items.Select(i => 

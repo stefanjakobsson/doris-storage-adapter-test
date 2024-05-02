@@ -191,7 +191,6 @@ public class BagItInfo
     }
 
 
-    // Maybe serialize to stream here instead?
     public byte[] Serialize()
     {
         var values = items.Values.SelectMany(i => i).Select(i => i.Label + ": " + i.Value);

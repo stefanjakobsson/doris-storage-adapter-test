@@ -9,6 +9,8 @@ namespace DatasetFileUpload.Services.Lock;
 
 internal class InProcessLockService : ILockService
 {
+    // TODO: release unused semaphores
+
     private readonly object lockObject = new();
 
     private readonly Dictionary<DatasetVersionIdentifier, SemaphoreSlim> datasetVersionLocks = [];
