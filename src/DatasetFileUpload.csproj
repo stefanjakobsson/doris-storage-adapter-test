@@ -14,7 +14,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Nerdbank.Streams" Version="2.10.72" />
+    <PackageReference Include="Nerdbank.Streams" Version="2.11.72" />
     <PackageReference Include="NetDevPack.Security.Jwt.AspNetCore" Version="8.1.5" />
     <PackageReference Include="NetDevPack.Security.JwtExtensions" Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
