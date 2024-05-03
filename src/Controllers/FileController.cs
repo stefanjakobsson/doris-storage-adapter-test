@@ -128,8 +128,6 @@ public class FileController(
             return TypedResults.Forbid();
         }
 
-        // WriteFileDataAsZip or GetFileDataByPaths?
-
         return TypedResults.Stream(_ => 
             appService.WriteFileDataAsZip(datasetVersion, path, Response.BodyWriter.AsStream()), 
             "application/zip", datasetIdentifier + "-" + versionNumber + ".zip");

@@ -311,7 +311,7 @@ public class ServiceImplementation(
         // Update payload manifest
         await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
 
-        return ToRoCrateFile(new(
+        return ToRoCrateFile(datasetVersion, new(
             ContentType: result.ContentType,
             DateCreated: result.DateCreated,
             DateModified: result.DateModified,
@@ -437,7 +437,7 @@ public class ServiceImplementation(
 
         foreach (var file in result.OrderBy(f => f.Path, StringComparer.InvariantCulture))
         {
-            yield return ToRoCrateFile(file, GetChecksum(file.Path));
+            yield return ToRoCrateFile(datasetVersion, file, GetChecksum(file.Path));
         }
     }
 
@@ -510,50 +510,40 @@ public class ServiceImplementation(
     private static string GetBagItFilePath(DatasetVersionIdentifier datasetVersion) =>
         GetFullFilePath(datasetVersion, bagItFileName);
 
-    private static FileTypeEnum GetFileType(string filePath)
-    {
-        if (filePath.StartsWith("data/data/"))
-        {
-            return FileTypeEnum.data;
-        }
-
-        if (filePath.StartsWith("data/documentation/"))
-        {
-            return FileTypeEnum.documentation;
-        }
-
-        return default;
-    }
-
-    private static string StripFileTypePrefix(string filePath) =>
-        GetFileType(filePath) switch
-        {
-            FileTypeEnum.data => filePath["data/data/".Length..],
-            FileTypeEnum.documentation => filePath["data/documentation/".Length..],
-            _ => filePath
-        };
-
     private static string UrlEncodePath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
     private static string DecodeUrlEncodedPath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
 
-    private RoCrateFile ToRoCrateFile(StorageServiceFile file, byte[]? sha256)
+    private RoCrateFile ToRoCrateFile(DatasetVersionIdentifier datasetVersion, StorageServiceFile file, byte[]? sha256)
     {
-        string path = StripFileTypePrefix(file.Path);
-        var type = GetFileType(file.Path);
+        FileTypeEnum type = default;
+        string id = "";
+
+        if (file.Path.StartsWith("data/data/"))
+        {
+            type = FileTypeEnum.data;
+            id = file.Path["data/data/".Length..];
+        }
+        else if (file.Path.StartsWith("data/documentation/"))
+        {
+            type = FileTypeEnum.documentation;
+            id = file.Path["data/documentation/".Length..];
+        }
 
         return new()
         {
-            Id = UrlEncodePath(path),
+            Id = UrlEncodePath(id),
             AdditionalType = type,
             ContentSize = file.Length.ToString(),
             DateCreated = file.DateCreated,
             DateModified = file.DateModified,
             EncodingFormat = file.ContentType ?? MimeTypes.GetMimeType(file.Path),
             Sha256 = sha256 == null ? null : Convert.ToHexString(sha256),
-            Url = new Uri(new Uri(generalConfiguration.PublicUrl), "file/" + type + "?filePath=" + Uri.EscapeDataString(path))
+            Url = new Uri(new Uri(generalConfiguration.PublicUrl), "file/" +
+                UrlEncodePath(datasetVersion.DatasetIdentifier + '/' + datasetVersion.VersionNumber + '/' + type) + 
+                "?filePath=" + Uri.EscapeDataString(id))
         };
     }
 
