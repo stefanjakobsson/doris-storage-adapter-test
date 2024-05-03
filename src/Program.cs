@@ -55,7 +55,7 @@ builder.Services.AddProblemDetails(options =>
         var exception = ctx.HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
         if (exception != null && exception is ApiException apiException)
         {
-            ctx.ProblemDetails.Detail = exception.Message;
+            ctx.ProblemDetails.Detail = apiException.Message;
             ctx.ProblemDetails.Status = apiException.StatusCode;
             ctx.HttpContext.Response.StatusCode = apiException.StatusCode;
         }

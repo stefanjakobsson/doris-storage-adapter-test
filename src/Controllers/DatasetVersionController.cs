@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
 
+[ApiController]
 public class DatasetVersionController(ServiceImplementation appService) : Controller
 {
     private readonly ServiceImplementation appService = appService;

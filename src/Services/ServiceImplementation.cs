@@ -36,19 +36,15 @@ public class ServiceImplementation(
 
     public async Task SetupDatasetVersion(DatasetVersionIdentifier datasetVersion)
     {
-        if (!await lockService.TryLockDatasetVersion(datasetVersion))
-        {
-            throw new ConflictException();
-        }
-
-        try
+        bool lockSuccessful = await lockService.TryLockDatasetVersion(datasetVersion, async () =>
         {
             await ThrowIfHasBeenPublished(datasetVersion);
             await SetupDatasetVersionImpl(datasetVersion);
-        }
-        finally
+        });
+
+        if (!lockSuccessful)
         {
-            await lockService.ReleaseDatasetVersionLock(datasetVersion);
+            throw new ConflictException();
         }
     }
 
@@ -101,18 +97,14 @@ public class ServiceImplementation(
 
     public async Task PublishDatasetVersion(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
-        if (!await lockService.TryLockDatasetVersion(datasetVersion))
-        {
-            throw new ConflictException();
-        }
-
-        try
+        bool lockSuccessful = await lockService.TryLockDatasetVersion(datasetVersion, async () =>
         {
             await PublishDatasetVersionImpl(datasetVersion, accessRight, doi);
-        }
-        finally
+        });
+
+        if (!lockSuccessful)
         {
-            await lockService.ReleaseDatasetVersionLock(datasetVersion);
+            throw new ConflictException();
         }
     }
 
@@ -189,12 +181,7 @@ public class ServiceImplementation(
 
     public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
     {
-        if (!await lockService.TryLockDatasetVersion(datasetVersion))
-        {
-            throw new ConflictException();
-        }
-
-        try
+        bool lockSuccessful = await lockService.TryLockDatasetVersion(datasetVersion, async () =>
         {
             if (!await VersionHasBeenPublished(datasetVersion))
             {
@@ -202,10 +189,11 @@ public class ServiceImplementation(
             }
 
             await WithdrawDatasetVersionImpl(datasetVersion);
-        }
-        finally
+        });
+
+        if (!lockSuccessful)
         {
-            await lockService.ReleaseDatasetVersionLock(datasetVersion);
+            throw new ConflictException();
         }
     }
 
@@ -237,21 +225,20 @@ public class ServiceImplementation(
         FileData data)
     {
         filePath = GetFilePathOrThrow(type, filePath);
+        RoCrateFile? result = default;
 
-        if (!await lockService.TryLockFilePath(datasetVersion, filePath))
+        bool lockSuccessful = await lockService.TryLockFilePath(datasetVersion, filePath, async () =>
+        {
+            await ThrowIfHasBeenPublished(datasetVersion);
+            result = await StoreFileImpl(datasetVersion, filePath, data);
+        });
+
+        if (!lockSuccessful)
         {
             throw new ConflictException();
         }
 
-        try
-        {
-            await ThrowIfHasBeenPublished(datasetVersion);
-            return await StoreFileImpl(datasetVersion, filePath, data);
-        }
-        finally
-        {
-            await lockService.ReleaseFilePathLock(datasetVersion, filePath);
-        }
+        return result!;
     }
 
     private async Task<RoCrateFile> StoreFileImpl(
@@ -340,19 +327,15 @@ public class ServiceImplementation(
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
-        if (!await lockService.TryLockFilePath(datasetVersion, filePath))
-        {
-            throw new ConflictException();
-        }
-
-        try
+        bool lockSuccessful = await lockService.TryLockFilePath(datasetVersion, filePath, async () =>
         {
             await ThrowIfHasBeenPublished(datasetVersion);
             await DeleteFileImpl(datasetVersion, filePath);
-        }
-        finally
+        });
+
+        if (!lockSuccessful)
         {
-            await lockService.ReleaseFilePathLock(datasetVersion, filePath);
+            throw new ConflictException();
         }
     }
 
@@ -458,56 +441,6 @@ public class ServiceImplementation(
         }
     }
 
-    // Change return type to class/record? Reuse return type from ListFiles?
-    public async IAsyncEnumerable<(FileTypeEnum Type, string FilePath, FileData Data)> GetFileDataByPaths(
-        DatasetVersionIdentifier datasetVersion, string[] paths)
-    {
-        var payloadManifest = await LoadManifest(datasetVersion, true);
-        var fetch = await LoadFetch(datasetVersion);
-
-        foreach (var filePath in payloadManifest.Items.Select(i => i.FilePath))
-        {
-            if (paths.Length > 0 && !paths.Any(filePath.StartsWith))
-            {
-                continue;
-            }
-
-            string actualFilePath = GetActualFilePath(datasetVersion, fetch, filePath);
-            var data = await storageService.GetFileData(actualFilePath);
-
-            if (data != null)
-            {
-                yield return (GetFileType(filePath), StripFileTypePrefix(filePath), data);
-            }
-        }
-
-        /*await foreach (var file in ListFilesForDatasetVersion(datasetVersion))
-        {
-            if (paths.Length > 0 && !paths.Any(file.Id.StartsWith))
-            {
-                continue;
-            }
-
-            string filePath;
-
-            if (fetch.TryGetItem(file.Id, out var fetchItem))
-            {
-                filePath = GetDatasetPath(datasetVersion) + DecodeUrlEncodedPath(fetchItem.Url[2..]);
-            }
-            else
-            {
-                filePath = GetFullFilePath(datasetVersion, file.Id);
-            }
-
-            var data = await storageService.GetFileData(filePath);
-
-            if (data != null)
-            {
-                yield return (file.AdditionalType, StripTypePrefix(file.Id), data.Stream);
-            }
-        }*/
-    }
-
     public async Task WriteFileDataAsZip(DatasetVersionIdentifier datasetVersion, string[] paths, Stream stream)
     {
         var payloadManifest = await LoadManifest(datasetVersion, true);
@@ -534,7 +467,6 @@ public class ServiceImplementation(
             }
         }
     }
-
 
     private static string GetFilePathOrThrow(FileTypeEnum type, string filePath)
     {
@@ -679,9 +611,8 @@ public class ServiceImplementation(
         // i.e. that it is called "within" a file lock.
 
         string manifestFilePath = GetManifestFileName(true);
-        await lockService.LockFilePath(datasetVersion, manifestFilePath);
 
-        try
+        await lockService.LockFilePath(datasetVersion, manifestFilePath, async () =>
         {
             var manifest = await LoadManifest(datasetVersion, true);
 
@@ -689,11 +620,7 @@ public class ServiceImplementation(
             {
                 await StoreManifest(datasetVersion, true, manifest);
             }
-        }
-        finally
-        {
-            await lockService.ReleaseFilePathLock(datasetVersion, manifestFilePath);
-        }
+        });
     }
 
     private async Task LockAndUpdateFetch(DatasetVersionIdentifier datasetVersion, Func<BagItFetch, bool> action)
@@ -701,9 +628,7 @@ public class ServiceImplementation(
         // This method assumes that datasetVersion is not locked for writing,
         // i.e. that it is called "within" a file lock.
 
-        await lockService.LockFilePath(datasetVersion, fetchFileName);
-
-        try
+        await lockService.LockFilePath(datasetVersion, fetchFileName, async () =>
         {
             var fetch = await LoadFetch(datasetVersion);
 
@@ -711,11 +636,7 @@ public class ServiceImplementation(
             {
                 await StoreFetch(datasetVersion, fetch);
             }
-        }
-        finally
-        {
-            await lockService.ReleaseFilePathLock(datasetVersion, fetchFileName);
-        }
+        });
     }
 
     private Task StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest)
