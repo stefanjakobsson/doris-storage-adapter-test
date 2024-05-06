@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage.Disk;
+namespace DatasetFileUpload.Services.Storage.FileSystem;
 
 internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfiguration> configuration) : IStorageService
 {

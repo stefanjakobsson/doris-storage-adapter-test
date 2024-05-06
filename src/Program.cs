@@ -5,7 +5,6 @@ using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Exceptions;
 using DatasetFileUpload.Services.Lock;
 using DatasetFileUpload.Services.Storage;
-using DatasetFileUpload.Services.Storage.Disk;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -33,10 +32,6 @@ builder.Services.AddOptionsWithValidateOnStart<GeneralConfiguration>()
 
 builder.Services.AddOptionsWithValidateOnStart<AuthorizationConfiguration>()
     .Bind(builder.Configuration.GetSection(AuthorizationConfiguration.ConfigurationSection))
-    .ValidateDataAnnotations();
-
-builder.Services.AddOptionsWithValidateOnStart<FileSystemStorageServiceConfiguration>()
-    .Bind(builder.Configuration.GetSection(FileSystemStorageServiceConfiguration.ConfigurationSection))
     .ValidateDataAnnotations();
 
 static void SetupJsonSerializer(JsonSerializerOptions options)
@@ -149,8 +144,36 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
 builder.Services.AddTransient<ServiceImplementation>();
 
-//builder.Services.AddSingleton<IStorageService, InMemoryStorageService>();
-builder.Services.AddTransient<IStorageService, FileSystemStorageService>();
+// Setup storage service based on configuration
+void SetupStorageService()
+{
+    var configSection = builder.Configuration.GetSection("Storage");
+    const string configKey = "ActiveStorageService";
+    string storageService = configSection.GetValue<string>(configKey) ??
+        throw new ApplicationException($"{configKey} not set.");
+
+    var types = typeof(Program).Assembly.GetTypes()
+        .Where(t =>
+            t.GetInterfaces().Any(i =>
+                i.IsGenericType &&
+                i.GetGenericTypeDefinition() == typeof(IStorageServiceConfigurer<>) &&
+                i.GenericTypeArguments[0].Name == storageService))
+        .ToList();
+
+    if (types.Count == 0)
+    {
+        throw new ApplicationException($"{storageService} not found.");
+    }
+    else if (types.Count > 1)
+    {
+        throw new ApplicationException($"Multiple implementations of {storageService} found.");
+    }
+
+    var configurer = Activator.CreateInstance(types[0]) as IStorageServiceConfigurerBase;
+    configurer!.Configure(builder.Services, configSection.GetSection(storageService));
+}
+
+SetupStorageService();
 
 var app = builder.Build();
 
