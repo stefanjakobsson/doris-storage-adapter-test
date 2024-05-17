@@ -6,9 +6,11 @@ namespace DatasetFileUpload.Services.Lock;
 
 public interface ILockService
 {
-    Task<bool> LockFilePath(DatasetVersionIdentifier datasetVersion, string filePath, Func<Task> task);
+    Task<IDisposable> LockPath(string path);
 
-    Task<bool> TryLockFilePath(DatasetVersionIdentifier datasetVersion, string filePath, Func<Task> task);
+    Task<bool> TryLockPath(string path, Func<Task> task);
 
-    Task<bool> TryLockDatasetVersion(DatasetVersionIdentifier datasetVersion, Func<Task> task);
+    Task<bool> TryLockDatasetVersionExclusive(DatasetVersionIdentifier datasetVersion, Func<Task> task);
+
+    Task<bool> TryLockDatasetVersionShared(DatasetVersionIdentifier datasetVersion, Func<Task> task);
 }

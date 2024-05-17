@@ -7,57 +7,50 @@ namespace DatasetFileUpload.Services.Lock;
 
 internal class InProcessLockService : ILockService
 {
-    private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionActiveFilePathLocks = new(new AsyncKeyedLockOptions(maxCount: int.MaxValue));
-    private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionLocks = new();
-    private readonly AsyncKeyedLocker<(DatasetVersionIdentifier DatasetVersion, string FilePath)> filePathLocks = new();
+    private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionSharedLocks = new(new AsyncKeyedLockOptions(maxCount: int.MaxValue));
+    private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionExclusiveLocks = new();
+    private readonly AsyncKeyedLocker<string> pathLocks = new();
 
-    public async Task<bool> LockFilePath(DatasetVersionIdentifier datasetVersion, string filePath, Func<Task> task)
+    public async Task<IDisposable> LockPath(string path)
     {
-        using (await datasetVersionActiveFilePathLocks.LockAsync(datasetVersion))
-        {
-            if (datasetVersionLocks.IsInUse(datasetVersion))
-            {
-                return false;
-            }
-
-            using (await filePathLocks.LockAsync((datasetVersion, filePath)))
-            {
-                await task();
-                return true;
-            }
-        }
+        return await pathLocks.LockAsync(path);
     }
 
-    public async Task<bool> TryLockFilePath(DatasetVersionIdentifier datasetVersion, string filePath, Func<Task> task)
+    public async Task<bool> TryLockPath(string path, Func<Task> task)
     {
-        using (await datasetVersionActiveFilePathLocks.LockAsync(datasetVersion))
-        {
-            if (datasetVersionLocks.IsInUse(datasetVersion))
-            {
-                return false;
-            }
-
-            return await filePathLocks.TryLockAsync((datasetVersion, filePath), task, 0);
-        }
+        return await pathLocks.TryLockAsync(path, task, 0);
     }
 
-
-    public async Task<bool> TryLockDatasetVersion(DatasetVersionIdentifier datasetVersion, Func<Task> task)
+    public async Task<bool> TryLockDatasetVersionExclusive(DatasetVersionIdentifier datasetVersion, Func<Task> task)
     {
-        bool noFilePathLocks = true;
+        bool noSharedLocks = true;
 
-        bool lockSuccessful = await datasetVersionLocks.TryLockAsync(datasetVersion, async () =>
+        bool lockSuccessful = await datasetVersionExclusiveLocks.TryLockAsync(datasetVersion, async () =>
         {
-            if (datasetVersionActiveFilePathLocks.IsInUse(datasetVersion))
+            if (datasetVersionSharedLocks.IsInUse(datasetVersion))
             {
-                noFilePathLocks = false;
+                noSharedLocks = false;
                 return;
             }
 
             await task();
-        }, 
+        },
         millisecondsTimeout: 0);
 
-        return lockSuccessful && noFilePathLocks;
+        return lockSuccessful && noSharedLocks;
+    }
+
+    public async Task<bool> TryLockDatasetVersionShared(DatasetVersionIdentifier datasetVersion, Func<Task> task)
+    {
+        using (await datasetVersionSharedLocks.LockAsync(datasetVersion))
+        {
+            if (datasetVersionExclusiveLocks.IsInUse(datasetVersion))
+            {
+                return false;
+            }
+
+            await task();
+            return true;
+        }
     }
 }

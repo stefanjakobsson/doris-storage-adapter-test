@@ -1,4 +1,5 @@
 using DatasetFileUpload.Services.Exceptions;
+using DatasetFileUpload.Services.Lock;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -8,15 +9,20 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.FileSystem;
 
-internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfiguration> configuration) : IStorageService
+internal class FileSystemStorageService(
+    IOptions<FileSystemStorageServiceConfiguration> configuration,
+    ILockService lockService) : IStorageService
 {
     private static readonly HashSet<char> invalidFileNameChars = [.. Path.GetInvalidFileNameChars()];
+
+    private readonly ILockService lockService = lockService;
 
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
   
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
+        string lockPath = GetPathRoot(filePath);
         filePath = GetPathOrThrow(filePath, basePath);
         string directoryPath = Path.GetDirectoryName(filePath)!;
 
@@ -32,9 +38,12 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
             await data.Stream.CopyToAsync(stream);
         }
 
-        if (!Directory.Exists(directoryPath))
+        using (await lockService.LockPath(lockPath))
         {
-            Directory.CreateDirectory(directoryPath);
+            if (!Directory.Exists(directoryPath))
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
         }
 
         var fileInfo = new FileInfo(filePath);
@@ -59,31 +68,34 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
             DateModified: fileInfo.LastWriteTimeUtc);
     }
 
-    public Task DeleteFile(string filePath)
+    public async Task DeleteFile(string filePath)
     {
+        string lockPath = GetPathRoot(filePath);
         filePath = GetPathOrThrow(filePath, basePath);
 
         if (!File.Exists(filePath))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         File.Delete(filePath);
 
         // Delete any empty subdirectories that result from deleting the file
-        DirectoryInfo? directory = new(Path.GetDirectoryName(filePath)!);
-        while
-        (
-            directory != null &&
-            directory.FullName != basePath &&
-            !directory.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Any()
-        )
+        using (await lockService.LockPath(lockPath))
         {
-            directory.Delete(false);
-            directory = directory.Parent;
+            string fullBasePath = Path.GetFullPath(basePath);
+            DirectoryInfo? directory = new(Path.GetDirectoryName(filePath)!);
+            while
+            (
+                directory != null &&
+                directory.FullName != fullBasePath &&
+                !directory.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Any()
+            )
+            {
+                directory.Delete(false);
+                directory = directory.Parent;
+            }
         }
-
-        return Task.CompletedTask;
     }
 
     public Task<FileData?> GetFileData(string filePath)
@@ -166,6 +178,17 @@ internal class FileSystemStorageService(IOptions<FileSystemStorageServiceConfigu
         if (Path.DirectorySeparatorChar != '/')
         {
             return path.Replace(Path.DirectorySeparatorChar, '/');
+        }
+
+        return path;
+    }
+
+    private static string GetPathRoot(string path)
+    {
+        int index = path.IndexOf('/') + 1;
+        if (index > 0)
+        {
+            return path[..index];
         }
 
         return path;

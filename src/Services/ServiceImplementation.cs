@@ -36,7 +36,7 @@ public class ServiceImplementation(
 
     public async Task SetupDatasetVersion(DatasetVersionIdentifier datasetVersion)
     {
-        bool lockSuccessful = await lockService.TryLockDatasetVersion(datasetVersion, async () =>
+        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
             await ThrowIfHasBeenPublished(datasetVersion);
             await SetupDatasetVersionImpl(datasetVersion);
@@ -97,7 +97,7 @@ public class ServiceImplementation(
 
     public async Task PublishDatasetVersion(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
     {
-        bool lockSuccessful = await lockService.TryLockDatasetVersion(datasetVersion, async () =>
+        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
             await PublishDatasetVersionImpl(datasetVersion, accessRight, doi);
         });
@@ -181,7 +181,7 @@ public class ServiceImplementation(
 
     public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
     {
-        bool lockSuccessful = await lockService.TryLockDatasetVersion(datasetVersion, async () =>
+        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
             if (!await VersionHasBeenPublished(datasetVersion))
             {
@@ -227,10 +227,17 @@ public class ServiceImplementation(
         filePath = GetFilePathOrThrow(type, filePath);
         RoCrateFile? result = default;
 
-        bool lockSuccessful = await lockService.TryLockFilePath(datasetVersion, filePath, async () =>
+        bool lockSuccessful = false;
+        await lockService.TryLockDatasetVersionShared(datasetVersion, async () =>
         {
-            await ThrowIfHasBeenPublished(datasetVersion);
-            result = await StoreFileImpl(datasetVersion, filePath, data);
+            string fullFilePath = GetFullFilePath(datasetVersion, filePath);
+
+            lockSuccessful = await lockService.TryLockPath(fullFilePath, async () =>
+            {
+                await ThrowIfHasBeenPublished(datasetVersion);
+                result = await StoreFileImpl(datasetVersion, filePath, fullFilePath, data);
+            });
+
         });
 
         if (!lockSuccessful)
@@ -244,6 +251,7 @@ public class ServiceImplementation(
     private async Task<RoCrateFile> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
         string filePath,
+        string fullFilePath,
         FileData data)
     {
         async Task<string?> Deduplicate(byte[] checksum)
@@ -278,8 +286,6 @@ public class ServiceImplementation(
                 UrlEncodePath(GetVersionPath(prevVersion)) + '/' +
                 UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
         }
-
-        string fullFilePath = GetFullFilePath(datasetVersion, filePath);
 
         using var sha256 = SHA256.Create();
         var hashStream = new CryptoStream(data.Stream, sha256, CryptoStreamMode.Read);
@@ -327,10 +333,17 @@ public class ServiceImplementation(
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
-        bool lockSuccessful = await lockService.TryLockFilePath(datasetVersion, filePath, async () =>
+        bool lockSuccessful = false;
+        await lockService.TryLockDatasetVersionShared(datasetVersion, async () =>
         {
-            await ThrowIfHasBeenPublished(datasetVersion);
-            await DeleteFileImpl(datasetVersion, filePath);
+            string fullFilePath = GetFullFilePath(datasetVersion, filePath);
+
+            lockSuccessful = await lockService.TryLockPath(fullFilePath, async () =>
+            {
+                await ThrowIfHasBeenPublished(datasetVersion);
+                await DeleteFileImpl(datasetVersion, filePath, fullFilePath);
+            });
+
         });
 
         if (!lockSuccessful)
@@ -341,9 +354,10 @@ public class ServiceImplementation(
 
     private async Task DeleteFileImpl(
         DatasetVersionIdentifier datasetVersion,
-        string filePath)
+        string filePath,
+        string fullFilePath)
     {
-        await storageService.DeleteFile(GetFullFilePath(datasetVersion, filePath));
+        await storageService.DeleteFile(fullFilePath);
         await RemoveItemFromPayloadManifest(datasetVersion, filePath);
         await RemoveItemFromFetch(datasetVersion, filePath);
     }
@@ -597,12 +611,9 @@ public class ServiceImplementation(
 
     private async Task LockAndUpdatePayloadManifest(DatasetVersionIdentifier datasetVersion, Func<BagItManifest, bool> action)
     {
-        // This method assumes that datasetVersion is not locked for writing,
-        // i.e. that it is called "within" a file lock.
+        // This method assumes that there is no exlusive lock on datasetVersion
 
-        string manifestFilePath = GetManifestFileName(true);
-
-        await lockService.LockFilePath(datasetVersion, manifestFilePath, async () =>
+        using (await lockService.LockPath(GetManifestFilePath(datasetVersion, true)))
         {
             var manifest = await LoadManifest(datasetVersion, true);
 
@@ -610,15 +621,14 @@ public class ServiceImplementation(
             {
                 await StoreManifest(datasetVersion, true, manifest);
             }
-        });
+        }
     }
 
     private async Task LockAndUpdateFetch(DatasetVersionIdentifier datasetVersion, Func<BagItFetch, bool> action)
     {
-        // This method assumes that datasetVersion is not locked for writing,
-        // i.e. that it is called "within" a file lock.
+        // This method assumes that there is no exlusive lock on datasetVersion
 
-        await lockService.LockFilePath(datasetVersion, fetchFileName, async () =>
+        using (await lockService.LockPath(GetFullFilePath(datasetVersion, fetchFileName)))
         {
             var fetch = await LoadFetch(datasetVersion);
 
@@ -626,7 +636,7 @@ public class ServiceImplementation(
             {
                 await StoreFetch(datasetVersion, fetch);
             }
-        });
+        }
     }
 
     private Task StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest)
