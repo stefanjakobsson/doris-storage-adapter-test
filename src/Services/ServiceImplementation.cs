@@ -369,7 +369,6 @@ public class ServiceImplementation(
         bool restrictToPubliclyAccessible)
     {
         // Should we add some kind of locking here?
-        // If so we need to distinguish between read and write locks (currently we only have write locks).
         // The requested file could potentially be added to fetch and removed from current version
         // after we found it in fetch and try to load it from current version, which will return
         // not found to the caller.
@@ -410,7 +409,6 @@ public class ServiceImplementation(
     public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
     {
         // Should we add some kind of locking here?
-        // If so we need to distinguish between read and write locks (currently we only have write locks).
         // Checksums and fetch can potentially be changed while processing this request,
         // leading to returning faulty checksums and other problems.
 
