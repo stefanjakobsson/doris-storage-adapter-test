@@ -1,6 +1,7 @@
 using DatasetFileUpload;
 using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Controllers;
+using DatasetFileUpload.Controllers.Attributes;
 using DatasetFileUpload.Services;
 using DatasetFileUpload.Services.Exceptions;
 using DatasetFileUpload.Services.Lock;
@@ -59,6 +60,9 @@ builder.Services.AddProblemDetails(options =>
 
 builder.Services.AddSwaggerGen(options =>
 {
+    options.EnableAnnotations();
+    options.OperationFilter<BinaryRequestBodyFilter>();
+
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         BearerFormat = "JWT",
@@ -76,7 +80,7 @@ builder.Services.AddSwaggerGen(options =>
                 Reference = new OpenApiReference
                 {
                     Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    Id = JwtBearerDefaults.AuthenticationScheme
                 }
             },
             Array.Empty<string>()

@@ -1,4 +1,5 @@
 ﻿using DatasetFileUpload.Authorization;
+using DatasetFileUpload.Controllers.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -19,6 +20,7 @@ public class TokenController(IJwtService jwtService, IOptions<GeneralConfigurati
     private readonly GeneralConfiguration configuration = configuration.Value;
 
     [DevOnly]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("dev/token/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
     public async Task<string> GetDataAccessToken(string datasetIdentifier, string versionNumber, [FromQuery]string[] roles)

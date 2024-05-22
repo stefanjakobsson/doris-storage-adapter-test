@@ -1,4 +1,5 @@
 using DatasetFileUpload.Authorization;
+using DatasetFileUpload.Controllers.Attributes;
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -6,8 +7,11 @@ using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Swashbuckle.AspNetCore.Annotations;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Mime;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
@@ -24,14 +28,20 @@ public class FileController(
 
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
-    // Disable request size limit to allow streaming large files
-    [DisableRequestSizeLimit]
+    [DisableRequestSizeLimit] // Disable request size limit to allow streaming large files
     [EnableCors(nameof(StoreFile))]
+    [BinaryRequestBody("*/*")]
+    [ProducesResponseType<RoCrateFile>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status411LengthRequired, MediaTypeNames.Application.ProblemJson)]
     public async Task<Results<Ok<RoCrateFile>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
-        [FromQuery] string filePath)
+        [FromQuery, BindRequired] string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -42,7 +52,7 @@ public class FileController(
 
         if (Request.Headers.ContentLength == null)
         {
-            return TypedResults.Problem("Missing Content-Length.", statusCode: 400);
+            return TypedResults.Problem("Missing Content-Length.", statusCode: 411);
         }
 
         var result = await appService.StoreFile(
@@ -57,11 +67,16 @@ public class FileController(
     [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     [EnableCors(nameof(DeleteFile))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<Results<Ok, ForbidHttpResult>> DeleteFile(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
-        string filePath)
+        [FromQuery, BindRequired] string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -74,14 +89,19 @@ public class FileController(
 
         return TypedResults.Ok();
     }
-
+    
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [EnableCors(nameof(GetFileData))]
+    [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status404NotFound)]
     public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetFileData(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
-        string filePath)
+        [FromQuery, BindRequired] string filePath)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
         bool restrictToPubliclyAccessible = true;
@@ -116,10 +136,14 @@ public class FileController(
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]
     [Authorize(Roles = Roles.ReadData)]
     [EnableCors(nameof(GetFileDataAsZip))]
+    [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), MediaTypeNames.Application.Zip)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     public Results<PushStreamHttpResult, ForbidHttpResult> GetFileDataAsZip(
         string datasetIdentifier,
         string versionNumber,
-        [FromQuery] string[] path)
+        [FromQuery, BindRequired] string[] path)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -129,12 +153,16 @@ public class FileController(
         }
 
         return TypedResults.Stream(_ => 
-            appService.WriteFileDataAsZip(datasetVersion, path, Response.BodyWriter.AsStream()), 
-            "application/zip", datasetIdentifier + "-" + versionNumber + ".zip");
+            appService.WriteFileDataAsZip(datasetVersion, path, Response.BodyWriter.AsStream()),
+            MediaTypeNames.Application.Zip, datasetIdentifier + "-" + versionNumber + ".zip");
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
+    [ProducesResponseType<IEnumerable<RoCrateFile>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);

@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
 
-namespace DatasetFileUpload.Controllers;
+namespace DatasetFileUpload.Controllers.Attributes;
 
 [AttributeUsage(AttributeTargets.Method)]
 internal class DevOnlyAttribute : Attribute, IFilterFactory

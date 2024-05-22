@@ -19,6 +19,7 @@
     <PackageReference Include="NetDevPack.Security.Jwt.AspNetCore" Version="8.1.5" />
     <PackageReference Include="NetDevPack.Security.JwtExtensions" Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.6.1" />
   </ItemGroup>
 
 </Project>

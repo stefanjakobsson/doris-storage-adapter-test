@@ -2,7 +2,9 @@
 using DatasetFileUpload.Models;
 using DatasetFileUpload.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Mime;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
@@ -14,6 +16,11 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
 
     [HttpPut("{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<OkResult> SetupDatasetVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
@@ -26,6 +33,11 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
     [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
     [Authorize(Roles = Roles.Service)]
     [Consumes("application/x-www-form-urlencoded")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<OkResult> PublishDatasetVersion(
         string datasetIdentifier,
         string versionNumber,
@@ -41,6 +53,11 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
 
     [HttpPut("{datasetIdentifier}/{versionNumber}/withdraw")]
     [Authorize(Roles = Roles.Service)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<OkResult> WithdrawDatasetVersion(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
