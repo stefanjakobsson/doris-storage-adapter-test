@@ -103,7 +103,17 @@ var generalConfiguration = builder.Configuration.Get<GeneralConfiguration>()!;
 // Set up JWT authentication/authorization
 builder.Services.AddAuthentication().AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = true;
+    if (builder.Environment.IsDevelopment())
+    {
+        // Disable HTTPS requirement to enable using regular HTTP in development
+        options.RequireHttpsMetadata = false;
+    }
+    else
+    {
+        // MUST be true in production for security reasons!
+        options.RequireHttpsMetadata = true; 
+    }
+
     options.SaveToken = true;
     options.SetJwksOptions(
         new(

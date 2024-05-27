@@ -1,20 +1,16 @@
-version: '3.4'
-
 services:
   upload:
     build: 
       context: .
       dockerfile: Dockerfile
     ports:
-      - 8051:8051
+      - 8080:8080
+      - 8081:8081
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8051
-    user: "upload-dev:upload-dev"
-  uoload-form-test:
-    image: httpd:latest
-    container_name: upload-form-test
-    ports: 
-      - 80:80
-    volumes:
-      - ./src/Tests/UploadForm:/usr/local/apache2/htdocs
+      - Storage__ActiveStorageService=FileSystemStorageService
+      - Storage__FileSystemStorageService__BasePath=/tmp/doris-data
+      - Storage__FileSystemStorageService__TempFilePath=/tmp
+      - Authorization__JwksUri=http://upload:8080/jwks
+      - Authorization__CorsAllowedOrigins__0=http://upload:8080
+      - PublicUrl=http://upload:8080

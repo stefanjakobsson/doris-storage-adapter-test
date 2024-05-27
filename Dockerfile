@@ -1,30 +1,25 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0 as build
-WORKDIR /src
+#See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
-USER root 
-
-# copy csproj and restore as distinct layers
-COPY src .
-RUN dotnet restore
-
-RUN dotnet publish -c release -o /app
-
-# final stage/image
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
-
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+USER app
 WORKDIR /app
-COPY --from=build /app ./
+EXPOSE 8080
+EXPOSE 8081
 
-EXPOSE 8051
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
+COPY ["src/DatasetFileUpload.csproj", "."]
+RUN dotnet restore "./DatasetFileUpload.csproj"
+COPY . .
+WORKDIR "/src/."
+RUN dotnet build "./DatasetFileUpload.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
+FROM build AS publish
+ARG BUILD_CONFIGURATION=Release
+RUN dotnet publish "./DatasetFileUpload.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-# Add a new user "upload-dev" with user id 8877
-RUN useradd -u 8877 upload-dev
-
-RUN mkdir /var/data && chown -R upload-dev:upload-dev /var/data
-
-USER upload-dev
-
-ENV ASPNETCORE_URLS=http://+:8051
-
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "DatasetFileUpload.dll"]
