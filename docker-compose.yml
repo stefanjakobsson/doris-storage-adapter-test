@@ -1,6 +1,7 @@
 services:
   upload:
-    build: 
+    image: doris-upload
+    build:
       context: .
       dockerfile: Dockerfile
     ports:
