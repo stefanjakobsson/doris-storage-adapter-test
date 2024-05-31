@@ -31,13 +31,13 @@ public class FileController(
     [DisableRequestSizeLimit] // Disable request size limit to allow streaming large files
     [EnableCors(nameof(StoreFile))]
     [BinaryRequestBody("*/*")]
-    [ProducesResponseType<RoCrateFile>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<File>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status411LengthRequired, MediaTypeNames.Application.ProblemJson)]
-    public async Task<Results<Ok<RoCrateFile>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
+    public async Task<Results<Ok<File>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
@@ -159,11 +159,11 @@ public class FileController(
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}")]
     [Authorize(Roles = Roles.Service)]
-    [ProducesResponseType<IEnumerable<RoCrateFile>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<IEnumerable<File>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(string datasetIdentifier, string versionNumber)
+    public async IAsyncEnumerable<File> ListFiles(string datasetIdentifier, string versionNumber)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 

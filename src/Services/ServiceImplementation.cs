@@ -227,14 +227,14 @@ public class ServiceImplementation(
         await StoreBagInfo(datasetVersion, bagInfoContents);
     }
 
-    public async Task<RoCrateFile> StoreFile(
+    public async Task<Models.File> StoreFile(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
         FileData data)
     {
         filePath = GetFilePathOrThrow(type, filePath);
-        RoCrateFile? result = default;
+        Models.File? result = default;
 
         bool lockSuccessful = false;
         await lockService.TryLockDatasetVersionShared(datasetVersion, async () =>
@@ -257,7 +257,7 @@ public class ServiceImplementation(
         return result!;
     }
 
-    private async Task<RoCrateFile> StoreFileImpl(
+    private async Task<Models.File> StoreFileImpl(
         DatasetVersionIdentifier datasetVersion,
         string filePath,
         string fullFilePath,
@@ -326,7 +326,7 @@ public class ServiceImplementation(
         // Update payload manifest
         await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
 
-        return ToRoCrateFile(datasetVersion, new(
+        return ToModelFile(datasetVersion, new(
             ContentType: result.ContentType,
             DateCreated: result.DateCreated,
             DateModified: result.DateModified,
@@ -415,7 +415,7 @@ public class ServiceImplementation(
         return result;
     }
 
-    public async IAsyncEnumerable<RoCrateFile> ListFiles(DatasetVersionIdentifier datasetVersion)
+    public async IAsyncEnumerable<Models.File> ListFiles(DatasetVersionIdentifier datasetVersion)
     {
         // Should we add some kind of locking here?
         // Checksums and fetch can potentially be changed while processing this request,
@@ -458,7 +458,7 @@ public class ServiceImplementation(
 
         foreach (var file in result.OrderBy(f => f.Path, StringComparer.InvariantCulture))
         {
-            yield return ToRoCrateFile(datasetVersion, file, GetChecksum(file.Path));
+            yield return ToModelFile(datasetVersion, file, GetChecksum(file.Path));
         }
     }
 
@@ -537,34 +537,34 @@ public class ServiceImplementation(
     private static string DecodeUrlEncodedPath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
 
-    private RoCrateFile ToRoCrateFile(DatasetVersionIdentifier datasetVersion, StorageServiceFile file, byte[]? sha256)
+    private Models.File ToModelFile(DatasetVersionIdentifier datasetVersion, StorageServiceFile file, byte[]? sha256)
     {
         FileTypeEnum type = default;
-        string id = "";
+        string name = "";
 
         if (file.Path.StartsWith("data/data/"))
         {
             type = FileTypeEnum.data;
-            id = file.Path["data/data/".Length..];
+            name = file.Path["data/data/".Length..];
         }
         else if (file.Path.StartsWith("data/documentation/"))
         {
             type = FileTypeEnum.documentation;
-            id = file.Path["data/documentation/".Length..];
+            name = file.Path["data/documentation/".Length..];
         }
 
         return new()
         {
-            Id = UrlEncodePath(id),
-            AdditionalType = type,
-            ContentSize = file.Length.ToString(),
+            Name = name,
+            Type = type,
+            ContentSize = file.Length,
             DateCreated = file.DateCreated,
             DateModified = file.DateModified,
             EncodingFormat = file.ContentType ?? MimeTypes.GetMimeType(file.Path),
             Sha256 = sha256 == null ? null : Convert.ToHexString(sha256),
             Url = new Uri(new Uri(generalConfiguration.PublicUrl), "file/" +
                 UrlEncodePath(datasetVersion.DatasetIdentifier + '/' + datasetVersion.VersionNumber + '/' + type) + 
-                "?filePath=" + Uri.EscapeDataString(id))
+                "?filePath=" + Uri.EscapeDataString(name))
         };
     }
 
