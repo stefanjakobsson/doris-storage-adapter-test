@@ -133,16 +133,25 @@ public class ServiceImplementation(
 
         var fetch = await LoadFetchWithChecksum();
         long octetCount = 0;
+        bool payloadFileFound = false;
         await foreach (var file in ListPayloadFiles(datasetVersion))
         {
+            payloadFileFound = true;
             octetCount += file.Length;
         }
         foreach (var item in fetch?.Fetch?.Items ?? [])
         {
+            payloadFileFound = true;
             if (item.Length != null)
             {
                 octetCount += item.Length.Value;
             }
+        }
+
+        if (!payloadFileFound)
+        {
+            // No payload files found, abort
+            return;
         }
 
         var payloadManifest = await LoadManifestWithChecksum();
