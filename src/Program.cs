@@ -133,23 +133,26 @@ builder.Services.AddCors(options =>
     options.AddPolicy(nameof(FileController.StoreFile), policy =>
     {
         policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
-        policy.WithHeaders(HeaderNames.ContentLength);
+        policy.WithHeaders(HeaderNames.ContentLength, HeaderNames.Authorization);
         policy.WithMethods(HttpMethods.Put);
     });
     options.AddPolicy(nameof(FileController.DeleteFile), policy =>
     {
         policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithHeaders(HeaderNames.Authorization);
         policy.WithMethods(HttpMethods.Delete);
     });
     options.AddPolicy(nameof(FileController.GetFileData), policy =>
     {
         policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithHeaders(HeaderNames.Authorization);
         policy.WithMethods(HttpMethods.Get);
         policy.WithExposedHeaders(HeaderNames.ContentDisposition);
     });
     options.AddPolicy(nameof(FileController.GetFileDataAsZip), policy =>
     {
         policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
+        policy.WithHeaders(HeaderNames.Authorization);
         policy.WithMethods(HttpMethods.Get);
         policy.WithExposedHeaders(HeaderNames.ContentDisposition);
     });
