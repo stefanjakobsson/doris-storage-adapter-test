@@ -133,7 +133,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy(nameof(FileController.StoreFile), policy =>
     {
         policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
-        policy.WithHeaders(HeaderNames.ContentLength, HeaderNames.Authorization);
+        policy.WithHeaders(HeaderNames.Authorization, HeaderNames.ContentLength, HeaderNames.ContentType);
         policy.WithMethods(HttpMethods.Put);
     });
     options.AddPolicy(nameof(FileController.DeleteFile), policy =>
