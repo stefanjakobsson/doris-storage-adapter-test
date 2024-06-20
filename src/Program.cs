@@ -115,7 +115,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
         options.RequireHttpsMetadata = true; 
     }
 
-    options.SaveToken = true;
+    // SetJwkOptions sets ValidIssuer and ValidAudience
     options.SetJwksOptions(
         new(
             jwksUri: authorizationConfiguration.JwksUri,
@@ -126,6 +126,8 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     // making algorithm confusion attacks impossible, but also means that it's harder
     // for SND to change the signing algorithm.
     options.TokenValidationParameters.ValidAlgorithms = ["ES256"];
+    // Default clock skew is 5 minutes (!), set to zero
+    options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
 });
 
 // Setup up CORS policys per endpoint
