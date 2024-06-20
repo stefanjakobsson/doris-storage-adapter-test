@@ -13,15 +13,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
-using NetDevPack.Security.Jwt.Core.Interfaces;
+using NetDevPack.Security.Jwt.Core.Jwa;
 using NetDevPack.Security.JwtExtensions;
 using System;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -63,7 +60,7 @@ builder.Services.AddSwaggerGen(options =>
     options.EnableAnnotations();
     options.OperationFilter<BinaryRequestBodyFilter>();
 
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    options.AddSecurityDefinition("Bearer", new()
     {
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
@@ -83,7 +80,7 @@ builder.Services.AddSwaggerGen(options =>
                     Id = JwtBearerDefaults.AuthenticationScheme
                 }
             },
-            Array.Empty<string>()
+            []
         }
     });
 });
@@ -91,7 +88,11 @@ builder.Services.AddSwaggerGen(options =>
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddMemoryCache(); // Needed for AddJwksManager()
-    builder.Services.AddJwksManager().PersistKeysInMemory();
+    builder.Services.AddJwksManager(o =>
+    {
+        o.Jws = Algorithm.Create(AlgorithmType.ECDsa, JwtType.Jws);
+    })
+    .PersistKeysInMemory();
 }
 
 var authorizationConfiguration = builder.Configuration
@@ -124,7 +125,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     // Limiting the valid algorithms to only the one used by Doris hardens security by
     // making algorithm confusion attacks impossible, but also means that it's harder
     // for SND to change the signing algorithm.
-    options.TokenValidationParameters.ValidAlgorithms = ["PS256"];
+    options.TokenValidationParameters.ValidAlgorithms = ["ES256"];
 });
 
 // Setup up CORS policys per endpoint
@@ -202,8 +203,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection();
-
 app.UseCors();
 
 app.UseAuthentication();
@@ -214,28 +213,6 @@ app.MapControllers();
 if (app.Environment.IsDevelopment())
 {
     app.UseJwksDiscovery();
-
-    using var scope = app.Services.CreateScope();
-    var jwtService = scope.ServiceProvider.GetService<IJwtService>()!;
-    var key = await jwtService.GetCurrentSigningCredentials();
-
-    string CreateToken(params string[] roles)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
-        {
-            Issuer = generalConfiguration.PublicUrl,
-            Audience = generalConfiguration.PublicUrl,
-            Subject = new(roles.Select(r => new Claim("role", r))),
-            Expires = DateTime.UtcNow.AddHours(12),
-            SigningCredentials = key
-        });
-
-        return tokenHandler.WriteToken(token);
-    }
-
-    Console.WriteLine("Service token:");
-    Console.WriteLine(CreateToken(Roles.Service));
 }
 
 app.Run();

@@ -7,7 +7,7 @@ using System;
 
 namespace DatasetFileUpload.Controllers.Attributes;
 
-[AttributeUsage(AttributeTargets.Method)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 internal class DevOnlyAttribute : Attribute, IFilterFactory
 {
     public IFilterMetadata CreateInstance(IServiceProvider serviceProvider)
@@ -17,7 +17,7 @@ internal class DevOnlyAttribute : Attribute, IFilterFactory
 
     public bool IsReusable => true;
 
-    [AttributeUsage(AttributeTargets.Method)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
     private class DevOnlyAttributeImpl(IWebHostEnvironment hostingEnv) : Attribute, IAuthorizationFilter
     {
         private IWebHostEnvironment HostingEnv { get; } = hostingEnv;

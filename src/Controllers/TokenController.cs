@@ -1,46 +1,54 @@
 ﻿using DatasetFileUpload.Authorization;
 using DatasetFileUpload.Controllers.Attributes;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using NetDevPack.Security.Jwt.Core.Interfaces;
 using System;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Controllers;
 
+[DevOnly]
+[ApiExplorerSettings(IgnoreApi = true)]
 [ApiController]
 public class TokenController(IJwtService jwtService, IOptions<GeneralConfiguration> configuration) : Controller
 {
     private readonly IJwtService jwtService = jwtService;
     private readonly GeneralConfiguration configuration = configuration.Value;
 
-    [DevOnly]
-    [ApiExplorerSettings(IgnoreApi = true)]
+    [HttpPost("dev/token")]
+    public Task<string> CreateServiceToken()
+    {
+        return CreateToken(Roles.Service, []);
+    }
+
     [HttpPost("dev/token/{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = Roles.Service)]
-    public async Task<string> GetDataAccessToken(string datasetIdentifier, string versionNumber, [FromQuery]string[] roles)
+    public Task<string> CreateDataAccessToken(string datasetIdentifier, string versionNumber, [FromQuery] bool write)
+    {
+        return CreateToken(write ? Roles.WriteData : Roles.ReadData, 
+            [new Claim(Claims.DatasetIdentifier, datasetIdentifier),
+            new Claim(Claims.DatasetVersionNumber, versionNumber)]);
+    }
+
+    private async Task<string> CreateToken(string role, IEnumerable<Claim> claims)
     {
         var key = await jwtService.GetCurrentSigningCredentials();
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
-            {
-                Issuer = configuration.PublicUrl,
-                Audience = configuration.PublicUrl,
-                Subject = new([
-                    ..roles.Select(r => new Claim("role", r)),
-                    new Claim(Claims.DatasetIdentifier, datasetIdentifier),
-                    new Claim(Claims.DatasetVersionNumber, versionNumber)
-                ]),
-                Expires = DateTime.UtcNow.AddHours(12),
-                SigningCredentials = key
-            });
-
-            return tokenHandler.WriteToken(token);
+        var tokenHandler = new JsonWebTokenHandler();
+        return tokenHandler.CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = configuration.PublicUrl,
+            Audience = configuration.PublicUrl,
+            Subject = new([
+                    new Claim("role", role),
+                    ..claims
+                 ]),
+            Expires = DateTime.UtcNow.AddHours(1),
+            SigningCredentials = key
+        });
     }
 }
