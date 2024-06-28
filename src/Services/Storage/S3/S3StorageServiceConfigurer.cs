@@ -8,8 +8,12 @@ internal class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageS
 {
     public void Configure(IServiceCollection services, IConfiguration configuration)
     {
-       services.AddSingleton<IAmazonS3>(p => 
-       {
+        services.AddOptionsWithValidateOnStart<S3StorageServiceConfiguration>()
+           .Bind(configuration)
+           .ValidateDataAnnotations();
+
+        services.AddSingleton<IAmazonS3>(p =>
+        {
             var config = new AmazonS3Config
             {
                 ServiceURL = "http://localhost:9000",

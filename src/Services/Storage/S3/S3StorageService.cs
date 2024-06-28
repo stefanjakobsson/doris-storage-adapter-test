@@ -1,14 +1,18 @@
 ﻿using Amazon.S3;
 using Amazon.S3.Model;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.S3;
 
-internal class S3StorageService(IAmazonS3 client) : IStorageService
+internal class S3StorageService(
+    IAmazonS3 client,
+    IOptions<S3StorageServiceConfiguration> configuration) : IStorageService
 {
     private readonly IAmazonS3 client = client;
+    private readonly S3StorageServiceConfiguration configuration = configuration.Value;
 
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
@@ -16,7 +20,7 @@ internal class S3StorageService(IAmazonS3 client) : IStorageService
 
         var request = new PutObjectRequest()
         {
-            BucketName = "test",
+            BucketName = configuration.BucketName,
             Key = filePath,
             InputStream = data.Stream,
             AutoCloseStream = false,
@@ -39,7 +43,7 @@ internal class S3StorageService(IAmazonS3 client) : IStorageService
     {
         return client.DeleteObjectAsync(new()
         {
-            BucketName = "test",
+            BucketName = configuration.BucketName,
             Key = filePath
         });
     }
@@ -50,7 +54,7 @@ internal class S3StorageService(IAmazonS3 client) : IStorageService
         {
             var response = await client.GetObjectAsync(new()
             {
-                BucketName = "test",
+                BucketName = configuration.BucketName,
                 Key = filePath
             });
 
@@ -76,7 +80,7 @@ internal class S3StorageService(IAmazonS3 client) : IStorageService
     {
         var request = new ListObjectsV2Request
         {
-            BucketName = "test",
+            BucketName = configuration.BucketName,
             Prefix = path
         };
 
