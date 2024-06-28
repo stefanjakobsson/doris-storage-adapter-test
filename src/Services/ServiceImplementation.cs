@@ -308,6 +308,10 @@ public class ServiceImplementation(
 
         var result = await storageService.StoreFile(fullFilePath, data with { Stream = monitoringStream });
 
+        // This read is a workaround to make sure that TransformFinalBlock is always called.
+        // See https://github.com/dotnet/runtime/issues/76948
+        await hashStream.ReadAsync(Array.Empty<byte>());
+
         byte[] checksum = sha256.Hash!;
 
         string? url = await Deduplicate(checksum);

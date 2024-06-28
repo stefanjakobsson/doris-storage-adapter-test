@@ -28,7 +28,9 @@ internal class InMemoryStorageService(InMemoryStorage storage) : IStorageService
         if (storage.TryGet(filePath, out var file))
         {
             return Task.FromResult<FileData?>(new(
-                new MemoryStream(file.Data), file.Data.LongLength, file.Metadata.ContentType));
+                Stream: new MemoryStream(file.Data), 
+                Length: file.Data.LongLength, 
+                ContentType: file.Metadata.ContentType));
         }
 
         return Task.FromResult<FileData?>(null);
