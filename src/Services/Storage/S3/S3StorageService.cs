@@ -28,14 +28,14 @@ internal class S3StorageService(
         };
 
         request.Headers.ContentLength = data.Length;
-        //request.Metadata.Add("date-created", now.ToString());
 
         await client.PutObjectAsync(request);
 
-
         return new(
-            ContentType: null, //?
-            DateCreated: now,
+            ContentType: null,
+            DateCreated: null,
+            // This is an approximation, to get the real
+            // value we need to call GetObjectMetadataAsync
             DateModified: now);
     }
 
@@ -82,6 +82,7 @@ internal class S3StorageService(
         {
             BucketName = configuration.BucketName,
             Prefix = path
+            
         };
 
         ListObjectsV2Response response;
@@ -93,8 +94,8 @@ internal class S3StorageService(
             foreach (var file in response.S3Objects)
             {
                 yield return new(
-                    ContentType: null, // ? Kan inte få från ListObjects
-                    DateCreated: null, // Hämta från metadata, går det?
+                    ContentType: null,
+                    DateCreated: null,
                     DateModified: file.LastModified.ToUniversalTime(),
                     Path: file.Key,
                     Length: file.Size);
