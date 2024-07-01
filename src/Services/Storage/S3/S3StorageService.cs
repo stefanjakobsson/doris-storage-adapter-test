@@ -3,6 +3,7 @@ using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.S3;
@@ -16,20 +17,79 @@ internal class S3StorageService(
 
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
+        // Retries?
+
+
         var now = DateTime.UtcNow;
 
-        var request = new PutObjectRequest()
+        if (data.Length > configuration.MultiPartUploadThreshold)
         {
-            BucketName = configuration.BucketName,
-            Key = filePath,
-            InputStream = data.Stream,
-            AutoCloseStream = false,
-            AutoResetStreamPosition = false,           
-        };
+            // Abort multi part upload on error?
+            // Retry?
 
-        request.Headers.ContentLength = data.Length;
+            var response = await client.InitiateMultipartUploadAsync(new()
+            {
+                BucketName = configuration.BucketName,
+                Key = filePath
+            });
 
-        await client.PutObjectAsync(request);
+            int chunkSize = configuration.MultiPartUploadPartSize;
+            byte[] buffer = new byte[configuration.MultiPartUploadPartSize];
+            using var memoryStream = new MemoryStream(buffer);
+            int chunk = 1;
+            long bytesWritten = 0;
+            var parts = new List<PartETag>();
+
+            while (bytesWritten < data.Length)
+            {
+                long bytesLeft = data.Length - bytesWritten;
+                int partSize = bytesLeft >= chunkSize ? chunkSize : (int)bytesLeft;
+
+                await data.Stream.ReadExactlyAsync(buffer, 0, partSize);
+                memoryStream.Position = 0;
+
+                var uploadPartResponse = await client.UploadPartAsync(new()
+                {
+                    BucketName = configuration.BucketName,
+                    Key = filePath,
+                    UploadId = response.UploadId,
+                    PartSize = partSize,
+                    PartNumber = chunk,
+                    InputStream = memoryStream
+                });
+
+                parts.Add(new(uploadPartResponse));
+
+                bytesWritten += partSize;
+                chunk++;
+            }
+
+            await client.CompleteMultipartUploadAsync(new()
+            {
+                BucketName = configuration.BucketName,
+                Key = filePath,
+                UploadId = response.UploadId,
+                PartETags = parts
+            });
+
+        }
+        else
+        {
+            // Check http return code?
+
+            var request = new PutObjectRequest()
+            {
+                BucketName = configuration.BucketName,
+                Key = filePath,
+                InputStream = data.Stream,
+                AutoCloseStream = false,
+                AutoResetStreamPosition = false,
+            };
+
+            request.Headers.ContentLength = data.Length;
+
+            await client.PutObjectAsync(request);
+        }
 
         return new(
             ContentType: null,
@@ -82,7 +142,7 @@ internal class S3StorageService(
         {
             BucketName = configuration.BucketName,
             Prefix = path
-            
+
         };
 
         ListObjectsV2Response response;
