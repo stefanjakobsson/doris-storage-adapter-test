@@ -1,9 +1,9 @@
 ﻿using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
+using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.S3;
@@ -34,19 +34,13 @@ internal class S3StorageService(
             });
 
             int chunkSize = configuration.MultiPartUploadPartSize;
-            byte[] buffer = new byte[configuration.MultiPartUploadPartSize];
-            using var memoryStream = new MemoryStream(buffer);
             int chunk = 1;
-            long bytesWritten = 0;
+            long bytesRemaining = data.Length;
             var parts = new List<PartETag>();
 
-            while (bytesWritten < data.Length)
+            while (bytesRemaining > 0)
             {
-                long bytesLeft = data.Length - bytesWritten;
-                int partSize = bytesLeft >= chunkSize ? chunkSize : (int)bytesLeft;
-
-                await data.Stream.ReadExactlyAsync(buffer, 0, partSize);
-                memoryStream.Position = 0;
+                int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
 
                 var uploadPartResponse = await client.UploadPartAsync(new()
                 {
@@ -55,12 +49,12 @@ internal class S3StorageService(
                     UploadId = response.UploadId,
                     PartSize = partSize,
                     PartNumber = chunk,
-                    InputStream = memoryStream
+                    InputStream = new FakeSeekableStream(data.Stream.ReadSlice(partSize), partSize),                    
                 });
 
                 parts.Add(new(uploadPartResponse));
 
-                bytesWritten += partSize;
+                bytesRemaining -= partSize;
                 chunk++;
             }
 
