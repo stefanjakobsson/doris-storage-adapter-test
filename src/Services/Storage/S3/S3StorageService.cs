@@ -19,78 +19,83 @@ internal class S3StorageService(
     {
         // Retries?
 
-
-        var now = DateTime.UtcNow;
-
-        if (data.Length > configuration.MultiPartUploadThreshold)
+        if (data.Length <= configuration.MultiPartUploadThreshold)
         {
-            // Abort multi part upload on error?
-            // Retry?
-
-            var response = await client.InitiateMultipartUploadAsync(new()
-            {
-                BucketName = configuration.BucketName,
-                Key = filePath
-            });
-
-            int chunkSize = configuration.MultiPartUploadPartSize;
-            int chunk = 1;
-            long bytesRemaining = data.Length;
-            var parts = new List<PartETag>();
-
-            while (bytesRemaining > 0)
-            {
-                int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
-
-                var uploadPartResponse = await client.UploadPartAsync(new()
-                {
-                    BucketName = configuration.BucketName,
-                    Key = filePath,
-                    UploadId = response.UploadId,
-                    PartSize = partSize,
-                    PartNumber = chunk,
-                    InputStream = new FakeSeekableStream(data.Stream.ReadSlice(partSize), partSize),                    
-                });
-
-                parts.Add(new(uploadPartResponse));
-
-                bytesRemaining -= partSize;
-                chunk++;
-            }
-
-            await client.CompleteMultipartUploadAsync(new()
-            {
-                BucketName = configuration.BucketName,
-                Key = filePath,
-                UploadId = response.UploadId,
-                PartETags = parts
-            });
-
+           await PutObject(filePath, data);
         }
         else
         {
-            // Check http return code?
-
-            var request = new PutObjectRequest()
-            {
-                BucketName = configuration.BucketName,
-                Key = filePath,
-                InputStream = data.Stream,
-                AutoCloseStream = false,
-                AutoResetStreamPosition = false,
-            };
-
-            request.Headers.ContentLength = data.Length;
-
-            await client.PutObjectAsync(request);
+           await MultiPartUpload(filePath, data);
         }
 
         return new(
             ContentType: null,
             DateCreated: null,
-            // This is an approximation, to get the real
-            // value we need to call GetObjectMetadataAsync
-            DateModified: now);
+            // DateTime.UtcNow is an approximation.
+            // To get the actual LastModified we need to call GetObjectMetadataAsync,
+            // which is arguably unnecessary overhead.
+            DateModified: DateTime.UtcNow);
+    }
+
+    private async Task PutObject(string filePath, FileData data)
+    {
+        var request = new PutObjectRequest()
+        {
+            BucketName = configuration.BucketName,
+            Key = filePath,
+            InputStream = data.Stream,
+            AutoCloseStream = false,
+            AutoResetStreamPosition = false,
+        };
+
+        request.Headers.ContentLength = data.Length;
+
+        await client.PutObjectAsync(request);
+    }
+
+    private async Task MultiPartUpload(string filePath, FileData data)
+    {
+        // Abort multi part upload on error?
+        // Retry?
+
+        var response = await client.InitiateMultipartUploadAsync(new()
+        {
+            BucketName = configuration.BucketName,
+            Key = filePath
+        });
+
+        int chunkSize = configuration.MultiPartUploadChunkSize;
+        int chunk = 1;
+        long bytesRemaining = data.Length;
+        var parts = new List<PartETag>();
+
+        while (bytesRemaining > 0)
+        {
+            int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
+
+            var uploadPartResponse = await client.UploadPartAsync(new()
+            {
+                BucketName = configuration.BucketName,
+                Key = filePath,
+                UploadId = response.UploadId,
+                PartSize = partSize,
+                PartNumber = chunk,
+                InputStream = new FakeSeekableStream(data.Stream.ReadSlice(partSize), partSize),
+            });
+
+            parts.Add(new(uploadPartResponse));
+
+            bytesRemaining -= partSize;
+            chunk++;
+        }
+
+        await client.CompleteMultipartUploadAsync(new()
+        {
+            BucketName = configuration.BucketName,
+            Key = filePath,
+            UploadId = response.UploadId,
+            PartETags = parts
+        });
     }
 
     public Task DeleteFile(string filePath)
@@ -155,8 +160,6 @@ internal class S3StorageService(
                     Length: file.Size);
             }
 
-            // If the response is truncated, set the request ContinuationToken
-            // from the NextContinuationToken property of the response.
             request.ContinuationToken = response.NextContinuationToken;
         }
         while (response.IsTruncated);
