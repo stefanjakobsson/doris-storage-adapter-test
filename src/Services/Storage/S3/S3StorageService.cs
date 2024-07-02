@@ -68,10 +68,12 @@ internal class S3StorageService(
         int chunk = 1;
         long bytesRemaining = data.Length;
         var parts = new List<PartETag>();
+        var stream = new FakeSeekableStream(data.Stream);
 
         while (bytesRemaining > 0)
         {
             int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
+            stream.Reset(partSize);
 
             var uploadPartResponse = await client.UploadPartAsync(new()
             {
@@ -80,7 +82,7 @@ internal class S3StorageService(
                 UploadId = response.UploadId,
                 PartSize = partSize,
                 PartNumber = chunk,
-                InputStream = new FakeSeekableStream(data.Stream.ReadSlice(partSize), partSize),
+                InputStream = stream,
             });
 
             parts.Add(new(uploadPartResponse));

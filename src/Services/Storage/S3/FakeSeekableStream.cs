@@ -5,48 +5,60 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.S3;
 
-internal class FakeSeekableStream(Stream underlyingStream, int length) : Stream
+internal class FakeSeekableStream(Stream underlyingStream) : Stream
 {
     private readonly Stream underlyingStream = underlyingStream;
-    private readonly int length = length;
+    private int length = 0;
+    private long position = 0;
 
-    // Delegate all operations except CanSeek and Length to underlyingStream
+    public void Reset(int length)
+    {
+        position = 0;
+        this.length = length;
+    }
 
     public override bool CanSeek => true;
 
     public override long Length => length;
 
-    public override bool CanRead => underlyingStream.CanRead;
+    public override bool CanRead => true;
 
-    public override bool CanWrite => underlyingStream.CanWrite;
+    public override bool CanWrite => false;
 
     public override long Position
     {
-        get => underlyingStream.Position;
-        set => underlyingStream.Position = value;
+        get => position;
+        set { }
     }
 
-    public override long Seek(long offset, SeekOrigin origin) => underlyingStream.Seek(offset, origin);
+    public override long Seek(long offset, SeekOrigin origin) => position;
 
     public override void Flush() => underlyingStream.Flush();
 
-    public override int Read(byte[] buffer, int offset, int count) => underlyingStream.Read(buffer, offset, count);
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        int result = underlyingStream.Read(buffer, offset, count);
+        position += result;
+        return result;
+    }
 
-    public override void SetLength(long value) => underlyingStream.SetLength(value);
+    public override void SetLength(long value) { }
 
-    public override void Write(byte[] buffer, int offset, int count) => underlyingStream.Write(buffer, offset, count);
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
     public override Task FlushAsync(CancellationToken cancellationToken) => underlyingStream.FlushAsync(cancellationToken);
 
-    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-        underlyingStream.ReadAsync(buffer, offset, count, cancellationToken);
+    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        var result = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken);
+        position += result;
+        return result;
+    }
 
-    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-        underlyingStream.ReadAsync(buffer, cancellationToken);
-
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-        underlyingStream.WriteAsync(buffer, offset, count, cancellationToken);
-
-    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
-        underlyingStream.WriteAsync(buffer, cancellationToken);
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        var result = await underlyingStream.ReadAsync(buffer, cancellationToken);
+        position += result;
+        return result;
+    }
 }
