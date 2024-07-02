@@ -1,7 +1,6 @@
 ﻿using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
-using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -68,7 +67,7 @@ internal class S3StorageService(
         int chunk = 1;
         long bytesRemaining = data.Length;
         var parts = new List<PartETag>();
-        var stream = new FakeSeekableStream(data.Stream);
+        var stream = new MultiPartUploadStream(data.Stream);
 
         while (bytesRemaining > 0)
         {

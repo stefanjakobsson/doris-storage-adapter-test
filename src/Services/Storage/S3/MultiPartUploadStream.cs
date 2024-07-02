@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.S3;
 
-internal class FakeSeekableStream(Stream underlyingStream) : Stream
+internal class MultiPartUploadStream(Stream underlyingStream) : Stream
 {
     private readonly Stream underlyingStream = underlyingStream;
     private int length = 0;
