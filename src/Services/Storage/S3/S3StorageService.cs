@@ -16,15 +16,13 @@ internal class S3StorageService(
 
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
-        // Retries?
-
         if (data.Length <= configuration.MultiPartUploadThreshold)
         {
-           await PutObject(filePath, data);
+            await PutObject(filePath, data);
         }
         else
         {
-           await MultiPartUpload(filePath, data);
+            await MultiPartUpload(filePath, data);
         }
 
         return new(
@@ -54,54 +52,68 @@ internal class S3StorageService(
 
     private async Task MultiPartUpload(string filePath, FileData data)
     {
-        // Abort multi part upload on error?
-        // Retry?
-
         var response = await client.InitiateMultipartUploadAsync(new()
         {
             BucketName = configuration.BucketName,
             Key = filePath
         });
 
-        int chunkSize = configuration.MultiPartUploadChunkSize;
-        int chunk = 1;
-        long bytesRemaining = data.Length;
-        var parts = new List<PartETag>();
-        var stream = new MultiPartUploadStream(data.Stream);
-
-        while (bytesRemaining > 0)
+        try
         {
-            int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
-            stream.Reset(partSize);
+            int chunkSize = configuration.MultiPartUploadChunkSize;
+            int chunk = 1;
+            long bytesRemaining = data.Length;
+            var parts = new List<PartETag>();
+            var stream = new MultiPartUploadStream(data.Stream);
 
-            var uploadPartResponse = await client.UploadPartAsync(new()
+            while (bytesRemaining > 0)
+            {
+                int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
+                stream.Reset(partSize);
+
+                var uploadPartResponse = await client.UploadPartAsync(new()
+                {
+                    BucketName = configuration.BucketName,
+                    Key = filePath,
+                    UploadId = response.UploadId,
+                    PartSize = partSize,
+                    PartNumber = chunk,
+                    InputStream = stream,
+                });
+
+                parts.Add(new(uploadPartResponse));
+                bytesRemaining -= partSize;
+                chunk++;
+            }
+
+            await client.CompleteMultipartUploadAsync(new()
             {
                 BucketName = configuration.BucketName,
                 Key = filePath,
                 UploadId = response.UploadId,
-                PartSize = partSize,
-                PartNumber = chunk,
-                InputStream = stream,
+                PartETags = parts
             });
-
-            parts.Add(new(uploadPartResponse));
-
-            bytesRemaining -= partSize;
-            chunk++;
         }
-
-        await client.CompleteMultipartUploadAsync(new()
+        catch
         {
-            BucketName = configuration.BucketName,
-            Key = filePath,
-            UploadId = response.UploadId,
-            PartETags = parts
-        });
+            try
+            {
+                await client.AbortMultipartUploadAsync(new()
+                {
+                    BucketName = configuration.BucketName,
+                    Key = filePath,
+                    UploadId = response.UploadId
+                });
+            }
+            catch { }
+
+            throw;
+        }
     }
 
-    public Task DeleteFile(string filePath)
+    public async Task DeleteFile(string filePath)
     {
-        return client.DeleteObjectAsync(new()
+        await client.DeleteObjectAsync(new()
         {
             BucketName = configuration.BucketName,
             Key = filePath
@@ -117,8 +129,6 @@ internal class S3StorageService(
                 BucketName = configuration.BucketName,
                 Key = filePath
             });
-
-            // Do we need to check response HTTP status code?
 
             return new(
                 Stream: response.ResponseStream,
