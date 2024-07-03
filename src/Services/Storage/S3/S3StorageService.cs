@@ -148,31 +148,20 @@ internal class S3StorageService(
 
     public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
     {
-        var request = new ListObjectsV2Request
+        var paginator = client.Paginators.ListObjectsV2(new()
         {
             BucketName = configuration.BucketName,
             Prefix = path
+        });
 
-        };
-
-        ListObjectsV2Response response;
-
-        do
+        await foreach (var file in paginator.S3Objects)
         {
-            response = await client.ListObjectsV2Async(request);
-
-            foreach (var file in response.S3Objects)
-            {
-                yield return new(
-                    ContentType: null,
-                    DateCreated: null,
-                    DateModified: file.LastModified.ToUniversalTime(),
-                    Path: file.Key,
-                    Length: file.Size);
-            }
-
-            request.ContinuationToken = response.NextContinuationToken;
+            yield return new(
+                ContentType: null,
+                DateCreated: null,
+                DateModified: file.LastModified.ToUniversalTime(),
+                Path: file.Key,
+                Length: file.Size);
         }
-        while (response.IsTruncated);
     }
 }
