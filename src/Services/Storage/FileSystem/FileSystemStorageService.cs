@@ -89,7 +89,7 @@ internal class FileSystemStorageService(
             (
                 directory != null &&
                 directory.FullName != fullBasePath &&
-                !directory.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Any()
+                !directory.EnumerateFileSystemInfos().Any()
             )
             {
                 directory.Delete(false);
