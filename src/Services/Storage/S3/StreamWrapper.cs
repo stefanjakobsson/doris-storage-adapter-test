@@ -5,17 +5,11 @@ using System.Threading.Tasks;
 
 namespace DatasetFileUpload.Services.Storage.S3;
 
-internal class MultiPartUploadStream(Stream underlyingStream) : Stream
+internal class StreamWrapper(Stream underlyingStream, long length) : Stream
 {
     private readonly Stream underlyingStream = underlyingStream;
-    private int length = 0;
+    private readonly long length = length;
     private long position = 0;
-
-    public void Reset(int length)
-    {
-        position = 0;
-        this.length = length;
-    }
 
     public override bool CanSeek => true;
 
@@ -28,10 +22,10 @@ internal class MultiPartUploadStream(Stream underlyingStream) : Stream
     public override long Position
     {
         get => position;
-        set { }
+        set => throw new NotSupportedException();
     }
 
-    public override long Seek(long offset, SeekOrigin origin) => position;
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
     public override void Flush() => underlyingStream.Flush();
 
@@ -42,7 +36,7 @@ internal class MultiPartUploadStream(Stream underlyingStream) : Stream
         return result;
     }
 
-    public override void SetLength(long value) { }
+    public override void SetLength(long value) => throw new NotSupportedException();
 
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 

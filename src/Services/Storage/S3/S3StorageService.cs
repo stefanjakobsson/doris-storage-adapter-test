@@ -1,5 +1,5 @@
 ﻿using Amazon.S3;
-using Amazon.S3.Model;
+using Amazon.S3.Transfer;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -16,15 +16,23 @@ internal class S3StorageService(
 
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
-        if (data.Length <= configuration.MultiPartUploadThreshold)
+        var utility = new TransferUtility(client, new()
         {
-            await PutObject(filePath, data);
-        }
-        else
-        {
-            await MultiPartUpload(filePath, data);
-        }
+            MinSizeBeforePartUpload = configuration.MultiPartUploadThreshold
+        });
 
+        var request = new TransferUtilityUploadRequest
+        {
+            AutoCloseStream = false,
+            AutoResetStreamPosition = false,
+            BucketName = configuration.BucketName,
+            Key = filePath,
+            InputStream = new StreamWrapper(data.Stream, data.Length),
+            PartSize = configuration.MultiPartUploadChunkSize            
+        };
+
+        await utility.UploadAsync(request);
+        
         return new(
             ContentType: null,
             DateCreated: null,
@@ -32,83 +40,6 @@ internal class S3StorageService(
             // To get the actual LastModified we need to call GetObjectMetadataAsync,
             // which is arguably unnecessary overhead.
             DateModified: DateTime.UtcNow);
-    }
-
-    private async Task PutObject(string filePath, FileData data)
-    {
-        var request = new PutObjectRequest()
-        {
-            BucketName = configuration.BucketName,
-            Key = filePath,
-            InputStream = data.Stream,
-            AutoCloseStream = false,
-            AutoResetStreamPosition = false,
-        };
-
-        request.Headers.ContentLength = data.Length;
-
-        await client.PutObjectAsync(request);
-    }
-
-    private async Task MultiPartUpload(string filePath, FileData data)
-    {
-        var response = await client.InitiateMultipartUploadAsync(new()
-        {
-            BucketName = configuration.BucketName,
-            Key = filePath
-        });
-
-        try
-        {
-            int chunkSize = configuration.MultiPartUploadChunkSize;
-            int chunk = 1;
-            long bytesRemaining = data.Length;
-            var parts = new List<PartETag>();
-            var stream = new MultiPartUploadStream(data.Stream);
-
-            while (bytesRemaining > 0)
-            {
-                int partSize = bytesRemaining > chunkSize ? chunkSize : (int)bytesRemaining;
-                stream.Reset(partSize);
-
-                var uploadPartResponse = await client.UploadPartAsync(new()
-                {
-                    BucketName = configuration.BucketName,
-                    Key = filePath,
-                    UploadId = response.UploadId,
-                    PartSize = partSize,
-                    PartNumber = chunk,
-                    InputStream = stream,
-                });
-
-                parts.Add(new(uploadPartResponse));
-                bytesRemaining -= partSize;
-                chunk++;
-            }
-
-            await client.CompleteMultipartUploadAsync(new()
-            {
-                BucketName = configuration.BucketName,
-                Key = filePath,
-                UploadId = response.UploadId,
-                PartETags = parts
-            });
-        }
-        catch
-        {
-            try
-            {
-                await client.AbortMultipartUploadAsync(new()
-                {
-                    BucketName = configuration.BucketName,
-                    Key = filePath,
-                    UploadId = response.UploadId
-                });
-            }
-            catch { }
-
-            throw;
-        }
     }
 
     public async Task DeleteFile(string filePath)
