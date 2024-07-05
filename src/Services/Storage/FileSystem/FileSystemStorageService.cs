@@ -108,7 +108,10 @@ internal class FileSystemStorageService(
         }
 
         var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        return Task.FromResult<FileData?>(new(stream, stream.Length, null));
+        return Task.FromResult<FileData?>(new(
+            Stream: stream, 
+            Length: stream.Length, 
+            ContentType: null));
     }
 
     public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)

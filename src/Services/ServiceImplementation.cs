@@ -296,19 +296,24 @@ public class ServiceImplementation(
                 UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
         }
 
-        using var sha256 = SHA256.Create();
-        var hashStream = new CryptoStream(data.Stream, sha256, CryptoStreamMode.Read);
+        using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
         long bytesRead = 0;
-        var monitoringStream = new MonitoringStream(hashStream);
+        var monitoringStream = new MonitoringStream(data.Stream);
         monitoringStream.DidRead += (_, e) =>
         {
             bytesRead += e.Count;
+            sha256.AppendData(e);
+        };
+        monitoringStream.DidReadByte += (_, e) =>
+        {
+            bytesRead++;
+            sha256.AppendData(new[] { (byte)e });
         };
 
         var result = await storageService.StoreFile(fullFilePath, data with { Stream = monitoringStream });
 
-        byte[] checksum = sha256.Hash!;
+        byte[] checksum = sha256.GetCurrentHash();
 
         string? url = await Deduplicate(checksum);
         if (url != null)
