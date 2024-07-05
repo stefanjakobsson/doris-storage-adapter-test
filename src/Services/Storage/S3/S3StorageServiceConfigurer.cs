@@ -19,7 +19,7 @@ internal class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageS
             {
                 // We disable retries since we do not support a real
                 // seekable stream (to avoid buffering in memory),
-                // see Services/Storage/S3/StreamWrapper.cs.
+                // see StreamWrapper.cs.
                 MaxErrorRetry = 0,
                 ServiceURL = s3Config.ServiceUrl,
                 ForcePathStyle = s3Config.ForcePathStyle
