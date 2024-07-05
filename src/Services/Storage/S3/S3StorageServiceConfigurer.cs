@@ -12,15 +12,14 @@ internal class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageS
            .Bind(configuration)
            .ValidateDataAnnotations();
 
-        services.AddSingleton<IAmazonS3>(p =>
-        {
-            var config = new AmazonS3Config
+        var s3Config = configuration.Get<S3StorageServiceConfiguration>()!;
+
+        services.AddSingleton<IAmazonS3>(
+            new AmazonS3Client(s3Config.AccessKey, s3Config.SecretKey, new AmazonS3Config
             {
-                ServiceURL = "http://localhost:9000",
-                ForcePathStyle = true
-            };
-            return new AmazonS3Client("test", "testtest", config);
-        });
+                ServiceURL = s3Config.ServiceUrl,
+                ForcePathStyle = s3Config.ForcePathStyle
+            }));
 
         services.AddTransient<IStorageService, S3StorageService>();
     }
