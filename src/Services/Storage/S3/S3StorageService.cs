@@ -28,7 +28,7 @@ internal class S3StorageService(
             BucketName = configuration.BucketName,
             Key = filePath,
             InputStream = new StreamWrapper(data.Stream, data.Length),
-            PartSize = configuration.MultiPartUploadChunkSize            
+            PartSize = configuration.MultiPartUploadChunkSize
         };
 
         await utility.UploadAsync(request);
