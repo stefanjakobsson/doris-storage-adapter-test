@@ -19,7 +19,7 @@ internal class FileSystemStorageService(
 
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
-  
+
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
         string lockPath = GetPathRoot(filePath);
@@ -109,8 +109,8 @@ internal class FileSystemStorageService(
 
         var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
         return Task.FromResult<FileData?>(new(
-            Stream: stream, 
-            Length: stream.Length, 
+            Stream: stream,
+            Length: stream.Length,
             ContentType: null));
     }
 
@@ -119,41 +119,53 @@ internal class FileSystemStorageService(
         // This is a hack to avoid warning CS1998 (async method without await)
         await Task.CompletedTask;
 
-        static IEnumerable<FileInfo> EnumerateFiles(string path)
+        static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo directory, string path)
         {
-            var directory = new DirectoryInfo(path);
-
-            if (!directory.Exists)
+            foreach (var entry in directory.EnumerateFileSystemInfos())
             {
-                yield break;
-            }
+                if (path != "" && !entry.FullName.StartsWith(path))
+                {
+                    continue;
+                }
 
-            foreach (var file in directory.EnumerateFiles())
-            {
-                yield return file;
-            }
-
-            foreach (var subDirectory in directory.EnumerateDirectories())
-            {
-                foreach (var file in EnumerateFiles(subDirectory.FullName))
+                if (entry is DirectoryInfo subDirectory)
+                {
+                    foreach (var file in EnumerateFiles(subDirectory, ""))
+                    {
+                        yield return file;
+                    }
+                }
+                else if (entry is FileInfo file)
                 {
                     yield return file;
                 }
             }
         }
 
-        path = GetPathOrThrow(path, basePath);
 
-        foreach (var file in EnumerateFiles(path))
+        path = GetPathOrThrow(path, basePath);
+        var directory = new DirectoryInfo(path);
+
+        if (!directory.Exists)
+        {
+            directory = new(path[..path.LastIndexOf(Path.DirectorySeparatorChar)]);
+
+            if (!directory.Exists)
+            {
+                yield break;
+            }
+        }
+
+        foreach (var file in EnumerateFiles(directory, directory.FullName != path ? path : ""))
         {
             var relativePath = Path.GetRelativePath(basePath, file.FullName);
 
             yield return new(
-                ContentType: null,
-                DateCreated: file.CreationTimeUtc,
-                DateModified: file.LastWriteTimeUtc,
-                Path: NormalizePath(relativePath),
-                Length: file.Length);
+              ContentType: null,
+              DateCreated: file.CreationTimeUtc,
+              DateModified: file.LastWriteTimeUtc,
+              Path: NormalizePath(relativePath),
+              Length: file.Length);
         }
     }
 
