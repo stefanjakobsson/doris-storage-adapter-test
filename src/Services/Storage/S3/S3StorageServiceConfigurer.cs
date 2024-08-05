@@ -16,7 +16,7 @@ internal class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageS
                 nameof(S3StorageServiceConfiguration.MultiPartUploadChunkSize) +
                 " is too small to allow uploading larger objects than the value of " +
                 nameof(S3StorageServiceConfiguration.MultiPartUploadThreshold) +
-                "(max number of parts per upload is 10 000)");
+                " (max number of parts per upload is 10 000)");
 
         var s3Config = configuration.Get<S3StorageServiceConfiguration>()!;
 
