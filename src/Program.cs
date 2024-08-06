@@ -58,6 +58,7 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddSwaggerGen(options =>
 {
     options.EnableAnnotations();
+    options.SupportNonNullableReferenceTypes();
     options.OperationFilter<BinaryRequestBodyFilter>();
 
     options.AddSecurityDefinition("Bearer", new()
