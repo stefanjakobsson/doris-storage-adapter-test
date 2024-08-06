@@ -1,4 +1,4 @@
-﻿namespace DatasetFileUpload.Authorization;
+﻿namespace DorisStorageAdapter.Authorization;
 
 internal static class Claims
 {

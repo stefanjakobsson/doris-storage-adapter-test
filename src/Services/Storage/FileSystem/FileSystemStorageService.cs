@@ -1,5 +1,5 @@
-using DatasetFileUpload.Services.Exceptions;
-using DatasetFileUpload.Services.Lock;
+using DorisStorageAdapter.Services.Exceptions;
+using DorisStorageAdapter.Services.Lock;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage.FileSystem;
+namespace DorisStorageAdapter.Services.Storage.FileSystem;
 
 internal class FileSystemStorageService(
     IOptions<FileSystemStorageServiceConfiguration> configuration,

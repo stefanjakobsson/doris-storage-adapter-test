@@ -1,6 +1,6 @@
 using System;
 
-namespace DatasetFileUpload.Models;
+namespace DorisStorageAdapter.Models;
 
 public record File
 {

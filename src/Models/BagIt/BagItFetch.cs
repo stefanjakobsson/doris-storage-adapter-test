@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Models.BagIt;
+namespace DorisStorageAdapter.Models.BagIt;
 
 public class BagItFetch
 {

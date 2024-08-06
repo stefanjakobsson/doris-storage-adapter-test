@@ -1,9 +1,9 @@
 ﻿using ByteSizeLib;
-using DatasetFileUpload.Models;
-using DatasetFileUpload.Models.BagIt;
-using DatasetFileUpload.Services.Exceptions;
-using DatasetFileUpload.Services.Lock;
-using DatasetFileUpload.Services.Storage;
+using DorisStorageAdapter.Models;
+using DorisStorageAdapter.Models.BagIt;
+using DorisStorageAdapter.Services.Exceptions;
+using DorisStorageAdapter.Services.Lock;
+using DorisStorageAdapter.Services.Storage;
 using Microsoft.Extensions.Options;
 using Nerdbank.Streams;
 using System;
@@ -16,7 +16,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services;
+namespace DorisStorageAdapter.Services;
 
 public class ServiceImplementation(
     IStorageService storageService,

@@ -2,7 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage;
+namespace DorisStorageAdapter.Services.Storage;
 
 public record FileData(
     Stream Stream, 

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace DatasetFileUpload.Services.Exceptions;
+namespace DorisStorageAdapter.Services.Exceptions;
 
 internal abstract class ApiException(string message, int statusCode = 400) : Exception(message)
 {

@@ -1,4 +1,4 @@
-﻿namespace DatasetFileUpload.Models.BagIt;
+﻿namespace DorisStorageAdapter.Models.BagIt;
 
 public record BagItManifestItem(
     string FilePath,

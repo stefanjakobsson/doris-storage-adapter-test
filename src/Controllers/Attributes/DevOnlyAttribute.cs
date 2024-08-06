@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
 
-namespace DatasetFileUpload.Controllers.Attributes;
+namespace DorisStorageAdapter.Controllers.Attributes;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 internal class DevOnlyAttribute : Attribute, IFilterFactory

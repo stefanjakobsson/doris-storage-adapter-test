@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 
-namespace DatasetFileUpload.Models.BagIt;
+namespace DorisStorageAdapter.Models.BagIt;
 
 /// <summary>
 ///    An IEqualityComparer that compares two byte arrays to see if they

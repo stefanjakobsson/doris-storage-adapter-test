@@ -1,4 +1,4 @@
-﻿namespace DatasetFileUpload.Services.Exceptions;
+﻿namespace DorisStorageAdapter.Services.Exceptions;
 
 internal class DatasetStatusException : ApiException
 {

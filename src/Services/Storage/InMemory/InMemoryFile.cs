@@ -1,4 +1,4 @@
-﻿namespace DatasetFileUpload.Services.Storage.InMemory;
+﻿namespace DorisStorageAdapter.Services.Storage.InMemory;
 
 internal record InMemoryFile(
     StorageServiceFile Metadata,

@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.IO;
 
-namespace DatasetFileUpload.Services.Storage.FileSystem;
+namespace DorisStorageAdapter.Services.Storage.FileSystem;
 
 internal record FileSystemStorageServiceConfiguration
 {

@@ -1,5 +1,5 @@
-﻿using DatasetFileUpload.Authorization;
-using DatasetFileUpload.Controllers.Attributes;
+﻿using DorisStorageAdapter.Authorization;
+using DorisStorageAdapter.Controllers.Attributes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Controllers;
+namespace DorisStorageAdapter.Controllers;
 
 [DevOnly]
 [ApiExplorerSettings(IgnoreApi = true)]

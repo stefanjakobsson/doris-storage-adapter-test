@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace DatasetFileUpload.Controllers.Attributes;
+namespace DorisStorageAdapter.Controllers.Attributes;
 
 [AttributeUsage(AttributeTargets.Method)]
 internal class BinaryRequestBodyAttribute(string contentType) : Attribute

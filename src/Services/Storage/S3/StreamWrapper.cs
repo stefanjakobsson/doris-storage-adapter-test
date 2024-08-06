@@ -3,7 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage.S3;
+namespace DorisStorageAdapter.Services.Storage.S3;
 
 // In order for AmazonS3Client to support multipart uploading
 // without buffering each part in memory, it needs a Stream that is seekable.

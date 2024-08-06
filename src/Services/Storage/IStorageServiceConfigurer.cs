@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace DatasetFileUpload.Services.Storage;
+namespace DorisStorageAdapter.Services.Storage;
 
 internal interface IStorageServiceConfigurerBase
 {

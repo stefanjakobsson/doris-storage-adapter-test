@@ -1,9 +1,9 @@
 ﻿using AsyncKeyedLock;
-using DatasetFileUpload.Models;
+using DorisStorageAdapter.Models;
 using System;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Lock;
+namespace DorisStorageAdapter.Services.Lock;
 
 internal class InProcessLockService : ILockService
 {

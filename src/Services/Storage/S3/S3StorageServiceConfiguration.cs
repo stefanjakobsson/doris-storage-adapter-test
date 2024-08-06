@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace DatasetFileUpload.Services.Storage.S3;
+namespace DorisStorageAdapter.Services.Storage.S3;
 
 internal record S3StorageServiceConfiguration
 {

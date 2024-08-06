@@ -1,3 +1,3 @@
-# Doris Remote File Upload
+# Doris Storage Adapter
 
 Documentation to be done.

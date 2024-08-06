@@ -1,7 +1,7 @@
-using DatasetFileUpload.Authorization;
-using DatasetFileUpload.Controllers.Attributes;
-using DatasetFileUpload.Models;
-using DatasetFileUpload.Services;
+using DorisStorageAdapter.Authorization;
+using DorisStorageAdapter.Controllers.Attributes;
+using DorisStorageAdapter.Models;
+using DorisStorageAdapter.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
@@ -14,7 +14,7 @@ using System.Linq;
 using System.Net.Mime;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Controllers;
+namespace DorisStorageAdapter.Controllers;
 
 [ApiController]
 public class FileController(

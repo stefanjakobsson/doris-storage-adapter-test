@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage.S3;
+namespace DorisStorageAdapter.Services.Storage.S3;
 
 internal class S3StorageService(
     IAmazonS3 client,

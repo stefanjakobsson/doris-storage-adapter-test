@@ -2,7 +2,7 @@
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Linq;
 
-namespace DatasetFileUpload.Controllers.Attributes;
+namespace DorisStorageAdapter.Controllers.Attributes;
 
 internal class BinaryRequestBodyFilter : IOperationFilter
 {

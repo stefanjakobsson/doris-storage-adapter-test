@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace DatasetFileUpload.Services.Storage.S3;
+namespace DorisStorageAdapter.Services.Storage.S3;
 
 internal class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageService>
 {

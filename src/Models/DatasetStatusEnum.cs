@@ -1,4 +1,4 @@
-﻿namespace DatasetFileUpload.Models;
+﻿namespace DorisStorageAdapter.Models;
 
 public enum DatasetStatusEnum
 {

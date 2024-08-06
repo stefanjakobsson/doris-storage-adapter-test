@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace DatasetFileUpload.Services.Storage;
+namespace DorisStorageAdapter.Services.Storage;
 
 public record StorageServiceFileBase(
     string? ContentType,

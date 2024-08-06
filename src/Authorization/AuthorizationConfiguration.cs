@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace DatasetFileUpload.Authorization;
+namespace DorisStorageAdapter.Authorization;
 
 internal record AuthorizationConfiguration
 {

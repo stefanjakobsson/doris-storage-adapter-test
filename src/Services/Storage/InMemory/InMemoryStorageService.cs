@@ -2,7 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 
-namespace DatasetFileUpload.Services.Storage.InMemory;
+namespace DorisStorageAdapter.Services.Storage.InMemory;
 
 internal class InMemoryStorageService(InMemoryStorage storage) : IStorageService
 {

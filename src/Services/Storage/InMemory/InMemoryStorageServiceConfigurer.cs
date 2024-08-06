@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace DatasetFileUpload.Services.Storage.InMemory;
+namespace DorisStorageAdapter.Services.Storage.InMemory;
 
 internal class InMemoryStorageServiceConfigurer : IStorageServiceConfigurer<InMemoryStorageService>
 {

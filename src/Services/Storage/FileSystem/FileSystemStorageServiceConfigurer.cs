@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace DatasetFileUpload.Services.Storage.FileSystem;
+namespace DorisStorageAdapter.Services.Storage.FileSystem;
 
 internal class FileSystemStorageServiceConfigurer : IStorageServiceConfigurer<FileSystemStorageService>
 {

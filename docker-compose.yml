@@ -1,6 +1,6 @@
 services:
-  upload:
-    image: doris-upload
+  doris-storage-adapter:
+    image: doris-storage-adapter
     build:
       context: .
       dockerfile: Dockerfile
@@ -12,6 +12,6 @@ services:
       - Storage__ActiveStorageService=FileSystemStorageService
       - Storage__FileSystemStorageService__BasePath=/tmp/doris-data
       - Storage__FileSystemStorageService__TempFilePath=/tmp
-      - Authorization__JwksUri=http://upload:8080/jwks
-      - Authorization__CorsAllowedOrigins__0=http://upload:8080
-      - PublicUrl=http://upload:8080
+      - Authorization__JwksUri=http://doris-storage-adapter:8080/jwks
+      - Authorization__CorsAllowedOrigins__0=http://doris-storage-adapter:8080
+      - PublicUrl=http://doris-storage-adapter:8080
