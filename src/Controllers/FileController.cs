@@ -143,7 +143,7 @@ public class FileController(
     public Results<PushStreamHttpResult, ForbidHttpResult> GetFileDataAsZip(
         string datasetIdentifier,
         string versionNumber,
-        [FromQuery, BindRequired] string[] path)
+        [FromQuery] string[] path)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 

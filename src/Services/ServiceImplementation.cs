@@ -474,19 +474,21 @@ public class ServiceImplementation(
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, false);
 
-        foreach (var filePath in payloadManifest.Items.Select(i => i.FilePath))
+        foreach (var manifestFilePath in payloadManifest.Items.Select(i => i.FilePath))
         {
+            string filePath = manifestFilePath[5..]; // Strip "data/"
+
             if (paths.Length > 0 && !paths.Any(filePath.StartsWith))
             {
                 continue;
             }
 
-            string actualFilePath = GetActualFilePath(datasetVersion, fetch, filePath);
+            string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestFilePath);
             var data = await storageService.GetFileData(actualFilePath);
 
             if (data != null)
             {
-                var entry = archive.CreateEntry(filePath[5..], CompressionLevel.NoCompression);
+                var entry = archive.CreateEntry(filePath, CompressionLevel.NoCompression);
                 using var entryStream = entry.Open();
                 using var dataStream = data.Stream;
                 await dataStream.CopyToAsync(entryStream);
