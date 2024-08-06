@@ -8,10 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AsyncKeyedLock" Version="6.4.2" />
-    <PackageReference Include="AWSSDK.S3" Version="3.7.309.10" />
+    <PackageReference Include="AsyncKeyedLock" Version="7.0.0" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.400.3" />
     <PackageReference Include="ByteSize" Version="2.1.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.6" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.7" />
     <PackageReference Include="MimeTypes" Version="2.5.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -19,8 +19,8 @@
     <PackageReference Include="Nerdbank.Streams" Version="2.11.74" />
     <PackageReference Include="NetDevPack.Security.Jwt.AspNetCore" Version="8.1.5" />
     <PackageReference Include="NetDevPack.Security.JwtExtensions" Version="8.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
-    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.6.2" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.7.0" />
   </ItemGroup>
 
 </Project>
