@@ -5,23 +5,27 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.S3;
 
-// In order for AmazonS3Client to support multipart uploading
-// without buffering each part in memory, it needs a Stream that is seekable.
-// The disadvantage of buffering is that upload part size directly influences
-// memory usage, which limits the usable part size.
-//
-// StreamWrapper is a faked seekable stream that can report Length and Position.
-// We do not actually support seeking, but seeking is only used by AmazonS3Client
-// when retrying, which we have disabled.
-internal class StreamWrapper(Stream inner, long length) : Stream
+/// <summary>
+/// In order for AmazonS3Client to support multipart uploading
+/// without buffering each part in memory, it needs a stream that is seekable.
+/// The disadvantage of buffering is that upload part size directly influences
+/// memory usage, which limits the usable part size.
+///
+/// StreamWrapper is a faked seekable stream that can report Length and Position.
+/// We do not actually support seeking, but seeking is only used by AmazonS3Client
+/// when retrying, which we have disabled.
+/// </summary>
+/// <param name="underlyingStream">The underlying stream to wrap.</param>
+/// <param name="length">The underlying stream's length.</param>
+internal class StreamWrapper(Stream underlyingStream, long length) : Stream
 {
-    private readonly Stream inner = inner;
+    private readonly Stream underlyingStream = underlyingStream;
     private readonly long length = length;
     private long position = 0;
 
     public override bool CanRead => true;
     public override bool CanSeek => true;
-    public override bool CanTimeout => inner.CanTimeout;
+    public override bool CanTimeout => underlyingStream.CanTimeout;
     public override bool CanWrite => false;
     public override long Length => length;
 
@@ -33,56 +37,51 @@ internal class StreamWrapper(Stream inner, long length) : Stream
 
     public override int ReadTimeout
     {
-        get => inner.ReadTimeout;
-        set => inner.ReadTimeout = value;
+        get => underlyingStream.ReadTimeout;
+        set => underlyingStream.ReadTimeout = value;
     }
 
-    public override void Close() => inner.Close();
-
-    public override void CopyTo(Stream destination, int bufferSize) => inner.CopyTo(destination, bufferSize);
-
-    public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken) =>
-        inner.CopyToAsync(destination, bufferSize, cancellationToken);
+    public override void Close() => underlyingStream.Close();
 
     protected override void Dispose(bool disposing) => base.Dispose(disposing);
 
-    public override ValueTask DisposeAsync() => inner.DisposeAsync();
+    public override ValueTask DisposeAsync() => underlyingStream.DisposeAsync();
  
-    public override void Flush() => inner.Flush();
+    public override void Flush() => underlyingStream.Flush();
 
-    public override Task FlushAsync(CancellationToken cancellation) => inner.FlushAsync(cancellation);
+    public override Task FlushAsync(CancellationToken cancellation) => underlyingStream.FlushAsync(cancellation);
 
     public override int Read(Span<byte> buffer)
     {
-        int result = inner.Read(buffer);
-        position += result;
-        return result;
+        int bytesRead = underlyingStream.Read(buffer);
+        position += bytesRead;
+        return bytesRead;
     }
 
     public override int Read(byte[] buffer, int offset, int count)
     {
-        int result = inner.Read(buffer, offset, count);
-        position += result;
-        return result;
+        int bytesRead = underlyingStream.Read(buffer, offset, count);
+        position += bytesRead;
+        return bytesRead;
     }
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        var result = await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-        position += result;
-        return result;
+        int bytesRead = await underlyingStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+        position += bytesRead;
+        return bytesRead;
     }
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        var result = await inner.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-        position += result;
-        return result;
+        var bytesRead = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+        position += bytesRead;
+        return bytesRead;
     }
 
     public override int ReadByte()
     {
-        var result = inner.ReadByte();
+        var result = underlyingStream.ReadByte();
 
         if (result > 0)
         {

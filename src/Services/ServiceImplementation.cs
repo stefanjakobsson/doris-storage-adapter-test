@@ -5,7 +5,6 @@ using DorisStorageAdapter.Services.Exceptions;
 using DorisStorageAdapter.Services.Lock;
 using DorisStorageAdapter.Services.Storage;
 using Microsoft.Extensions.Options;
-using Nerdbank.Streams;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -296,24 +295,10 @@ public class ServiceImplementation(
                 UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
         }
 
-        using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-
-        long bytesRead = 0;
-        var monitoringStream = new MonitoringStream(data.Stream);
-        monitoringStream.DidRead += (_, e) =>
-        {
-            bytesRead += e.Count;
-            sha256.AppendData(e);
-        };
-        monitoringStream.DidReadByte += (_, e) =>
-        {
-            bytesRead++;
-            sha256.AppendData(new[] { (byte)e });
-        };
-
-        var result = await storageService.StoreFile(fullFilePath, data with { Stream = monitoringStream });
-
-        byte[] checksum = sha256.GetCurrentHash();
+        var hashStream = new CountedHashStream(data.Stream);
+        var result = await storageService.StoreFile(fullFilePath, data with { Stream = hashStream });
+        byte[] checksum = hashStream.GetHash();
+        long bytesRead = hashStream.BytesRead;
 
         string? url = await Deduplicate(checksum);
         if (url != null)
@@ -570,7 +555,7 @@ public class ServiceImplementation(
             EncodingFormat = file.ContentType ?? MimeTypes.GetMimeType(file.Path),
             Sha256 = sha256 == null ? null : Convert.ToHexString(sha256),
             Url = new Uri(new Uri(generalConfiguration.PublicUrl), "file/" +
-                UrlEncodePath(datasetVersion.DatasetIdentifier + '/' + datasetVersion.VersionNumber + '/' + type) + 
+                UrlEncodePath(datasetVersion.DatasetIdentifier + '/' + datasetVersion.VersionNumber + '/' + type) +
                 "?filePath=" + Uri.EscapeDataString(name))
         };
     }
@@ -704,7 +689,7 @@ public class ServiceImplementation(
         }
     }
 
-    private static FileData CreateFileDataFromByteArray(byte[] data) => 
+    private static FileData CreateFileDataFromByteArray(byte[] data) =>
         new(new MemoryStream(data), data.LongLength, "text/plain");
 
     private async Task<bool> VersionHasBeenPublished(DatasetVersionIdentifier datasetVersion)
