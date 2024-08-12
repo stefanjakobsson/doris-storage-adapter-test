@@ -22,9 +22,7 @@ internal class FileSystemStorageService(
 
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
     {
-        string lockPath = GetPathRoot(filePath);
-        filePath = GetPathOrThrow(filePath, basePath);
-        string directoryPath = Path.GetDirectoryName(filePath)!;
+        filePath = GetFullPathOrThrow(filePath);
 
         string tempFile;
         do
@@ -33,33 +31,53 @@ internal class FileSystemStorageService(
         }
         while (File.Exists(tempFile));
 
-        using (var stream = new FileStream(tempFile, FileMode.Create))
+        string directoryPath = Path.GetDirectoryName(filePath)!;
+        FileInfo fileInfo;
+        DateTime? dateCreated = null;
+
+        try
         {
-            await data.Stream.CopyToAsync(stream);
+            using (var stream = new FileStream(tempFile, FileMode.Create))
+            {
+                await data.Stream.CopyToAsync(stream);
+            }
+
+            await CreateDirectory(directoryPath);
+
+            fileInfo = new FileInfo(filePath);
+            if (fileInfo.Exists)
+            {
+                dateCreated = fileInfo.CreationTimeUtc;
+            }
+
+            File.Move(tempFile, filePath, true);
+        }
+        catch
+        {
+            // Failed, try to clean up
+            try
+            {
+                File.Delete(tempFile);
+                await DeleteEmptyDirectories(directoryPath);
+            }
+            catch { }
+
+            throw;
         }
 
-        using (await lockService.LockPath(lockPath))
+        try
         {
-            if (!Directory.Exists(directoryPath))
+            // Update creation time if necessary
+            fileInfo.Refresh();
+            if (dateCreated != null)
             {
-                Directory.CreateDirectory(directoryPath);
+                fileInfo.CreationTimeUtc = dateCreated.Value;
             }
         }
-
-        var fileInfo = new FileInfo(filePath);
-
-        DateTime? dateCreated = null;
-        if (fileInfo.Exists)
+        catch 
         {
-            dateCreated = fileInfo.CreationTimeUtc;
-        }
-
-        File.Move(tempFile, filePath, true);
-
-        fileInfo.Refresh();
-        if (dateCreated != null)
-        {
-            fileInfo.CreationTimeUtc = dateCreated.Value;
+            // Ignore errors here since file has been successfully stored
+            // and updating creation time is not crucial
         }
 
         return new(
@@ -70,37 +88,25 @@ internal class FileSystemStorageService(
 
     public async Task DeleteFile(string filePath)
     {
-        string lockPath = GetPathRoot(filePath);
-        filePath = GetPathOrThrow(filePath, basePath);
-
-        if (!File.Exists(filePath))
-        {
-            return;
-        }
+        filePath = GetFullPathOrThrow(filePath);
 
         File.Delete(filePath);
 
-        // Delete any empty subdirectories that result from deleting the file
-        using (await lockService.LockPath(lockPath))
+        try
         {
-            string fullBasePath = Path.GetFullPath(basePath);
-            DirectoryInfo? directory = new(Path.GetDirectoryName(filePath)!);
-            while
-            (
-                directory != null &&
-                directory.FullName != fullBasePath &&
-                !directory.EnumerateFileSystemInfos().Any()
-            )
-            {
-                directory.Delete(false);
-                directory = directory.Parent;
-            }
+            // Delete any empty subdirectories that result from deleting the file
+            await DeleteEmptyDirectories(Path.GetDirectoryName(filePath)!);
+        }
+        catch
+        {
+            // Ignore errors here since file has been successfully removed
+            // and removing empty directories is not crucial
         }
     }
 
     public Task<FileData?> GetFileData(string filePath)
     {
-        filePath = GetPathOrThrow(filePath, basePath);
+        filePath = GetFullPathOrThrow(filePath);
 
         if (!File.Exists(filePath))
         {
@@ -143,7 +149,7 @@ internal class FileSystemStorageService(
         }
 
 
-        path = GetPathOrThrow(path, basePath);
+        path = GetFullPathOrThrow(path);
         var directory = new DirectoryInfo(path);
 
         if (!directory.Exists)
@@ -169,7 +175,7 @@ internal class FileSystemStorageService(
         }
     }
 
-    private static string GetPathOrThrow(string path, string basePath)
+    private string GetFullPathOrThrow(string path)
     {
         void Throw() => throw new IllegalPathException(path);
 
@@ -198,14 +204,47 @@ internal class FileSystemStorageService(
         return path;
     }
 
-    private static string GetPathRoot(string path)
+    private string GetLockPath(string directoryPath)
     {
-        int index = path.IndexOf('/') + 1;
+        string relativePath = NormalizePath(Path.GetRelativePath(basePath, directoryPath));
+
+        int index = relativePath.IndexOf('/') + 1;
         if (index > 0)
         {
-            return path[..index];
+            return relativePath[..index];
         }
 
-        return path;
+        return relativePath;
+    }
+
+    private Task<IDisposable> LockPath(string directoryPath) => lockService.LockPath(GetLockPath(directoryPath));
+
+    private async Task CreateDirectory(string directoryPath)
+    {
+        using (await LockPath(directoryPath))
+        {
+            if (!Directory.Exists(directoryPath))
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
+        }
+    }
+
+    private async Task DeleteEmptyDirectories(string directoryPath)
+    {
+        using (await LockPath(directoryPath))
+        {
+            DirectoryInfo? directory = new(directoryPath);
+            while
+            (
+                directory != null &&
+                directory.FullName != basePath &&
+                !directory.EnumerateFileSystemInfos().Any()
+            )
+            {
+                directory.Delete(false);
+                directory = directory.Parent;
+            }
+        }
     }
 }
