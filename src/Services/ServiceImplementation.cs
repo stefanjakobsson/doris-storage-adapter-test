@@ -11,8 +11,10 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services;
@@ -33,13 +35,16 @@ public class ServiceImplementation(
     private const string bagItFileName = "bagit.txt";
     private const string bagInfoFileName = "bag-info.txt";
 
-    public async Task SetupDatasetVersion(DatasetVersionIdentifier datasetVersion)
+    public async Task SetupDatasetVersion(
+        DatasetVersionIdentifier datasetVersion, 
+        CancellationToken cancellationToken)
     {
         bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
-            await ThrowIfHasBeenPublished(datasetVersion);
-            await SetupDatasetVersionImpl(datasetVersion);
-        });
+            await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
+            await SetupDatasetVersionImpl(datasetVersion, cancellationToken);
+        },
+        cancellationToken);
 
         if (!lockSuccessful)
         {
@@ -47,19 +52,24 @@ public class ServiceImplementation(
         }
     }
 
-    private async Task SetupDatasetVersionImpl(DatasetVersionIdentifier datasetVersion)
+    private async Task SetupDatasetVersionImpl(
+        DatasetVersionIdentifier datasetVersion, 
+        CancellationToken cancellationToken)
     {
         async Task CopyPayloadManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion)
         {
-            using var fileData = await storageService.GetFileData(GetManifestFilePath(fromVersion, true));
+            using var fileData = await storageService.GetFileData(
+                GetManifestFilePath(fromVersion, true), cancellationToken);
+
             if (fileData != null)
             {
-                await storageService.StoreFile(GetManifestFilePath(toVersion, true), fileData);
+                await storageService.StoreFile(
+                    GetManifestFilePath(toVersion, true), fileData, cancellationToken);
             }
         }
 
-        if (await storageService.ListFiles(GetDatasetVersionPath(datasetVersion))
-                .GetAsyncEnumerator().MoveNextAsync())
+        if (await storageService.ListFiles(GetDatasetVersionPath(datasetVersion), cancellationToken)
+                .GetAsyncEnumerator(cancellationToken).MoveNextAsync())
         {
             // Files are already present for datasetVersion, abort
             return;
@@ -71,10 +81,12 @@ public class ServiceImplementation(
         }
 
         var previousVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNr);
-        var fetch = await LoadFetch(previousVersion);
+        var fetch = await LoadFetch(previousVersion, cancellationToken);
         var newFetch = new BagItFetch();
 
         await CopyPayloadManifest(previousVersion, datasetVersion);
+
+        // Should we cancel from here on? If so we need to clean up state.
 
         string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
 
@@ -83,7 +95,7 @@ public class ServiceImplementation(
             newFetch.AddOrUpdateItem(item);
         }
 
-        await foreach (var file in ListPayloadFiles(previousVersion))
+        await foreach (var file in ListPayloadFiles(previousVersion, CancellationToken.None))
         {
             if (!fetch.Contains(file.Path))
             {
@@ -91,15 +103,20 @@ public class ServiceImplementation(
             }
         }
 
-        await StoreFetch(datasetVersion, newFetch);
+        await StoreFetch(datasetVersion, newFetch, CancellationToken.None);
     }
 
-    public async Task PublishDatasetVersion(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
+    public async Task PublishDatasetVersion(
+        DatasetVersionIdentifier datasetVersion, 
+        AccessRightEnum accessRight, 
+        string doi,
+        CancellationToken cancellationToken)
     {
         bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
-            await PublishDatasetVersionImpl(datasetVersion, accessRight, doi);
-        });
+            await PublishDatasetVersionImpl(datasetVersion, accessRight, doi, cancellationToken);
+        },
+        cancellationToken);
 
         if (!lockSuccessful)
         {
@@ -107,11 +124,15 @@ public class ServiceImplementation(
         }
     }
 
-    private async Task PublishDatasetVersionImpl(DatasetVersionIdentifier datasetVersion, AccessRightEnum accessRight, string doi)
+    private async Task PublishDatasetVersionImpl(
+        DatasetVersionIdentifier datasetVersion, 
+        AccessRightEnum accessRight, 
+        string doi,
+        CancellationToken cancellationToken)
     {
-        async Task<(T, byte[] Checksum)?> LoadWithChecksum<T>(string filePath, Func<Stream, Task<T>> func)
+        async Task<(T, byte[] Checksum)?> LoadWithChecksum<T>(string filePath, Func<Stream, CancellationToken, Task<T>> func)
         {
-            using var fileData = await storageService.GetFileData(filePath);
+            using var fileData = await storageService.GetFileData(filePath, cancellationToken);
 
             if (fileData == null)
             {
@@ -121,7 +142,7 @@ public class ServiceImplementation(
             using var sha256 = SHA256.Create();
             using var hashStream = new CryptoStream(fileData.Stream, sha256, CryptoStreamMode.Read);
 
-            return (await func(hashStream), sha256.Hash!);
+            return (await func(hashStream, cancellationToken), sha256.Hash!);
         }
 
         Task<(BagItManifest Manifest, byte[] Checksum)?> LoadManifestWithChecksum() =>
@@ -133,7 +154,7 @@ public class ServiceImplementation(
         var fetch = await LoadFetchWithChecksum();
         long octetCount = 0;
         bool payloadFileFound = false;
-        await foreach (var file in ListPayloadFiles(datasetVersion))
+        await foreach (var file in ListPayloadFiles(datasetVersion, cancellationToken))
         {
             payloadFileFound = true;
             octetCount += file.Length;
@@ -170,7 +191,7 @@ public class ServiceImplementation(
         byte[] bagItContents = Encoding.UTF8.GetBytes("BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8");
 
         // Add bagit.txt, bag-info.txt and manifest-sha256.txt to tagmanifest-sha256.txt
-        var tagManifest = await LoadManifest(datasetVersion, false);
+        var tagManifest = await LoadManifest(datasetVersion, false, cancellationToken);
         tagManifest.AddOrUpdateItem(new(bagItFileName, SHA256.HashData(bagItContents)));
         tagManifest.AddOrUpdateItem(new(bagInfoFileName, SHA256.HashData(bagInfoContents)));
         if (payloadManifest != null)
@@ -182,22 +203,28 @@ public class ServiceImplementation(
             tagManifest.AddOrUpdateItem(new(fetchFileName, fetch.Value.Checksum));
         }
 
-        await StoreManifest(datasetVersion, false, tagManifest);
-        await StoreBagInfo(datasetVersion, bagInfoContents);
-        await storageService.StoreFile(GetBagItFilePath(datasetVersion), CreateFileDataFromByteArray(bagItContents));
+        await StoreManifest(datasetVersion, false, tagManifest, cancellationToken);
+        await StoreBagInfo(datasetVersion, bagInfoContents, CancellationToken.None);
+        await storageService.StoreFile(
+            GetBagItFilePath(datasetVersion), 
+            CreateFileDataFromByteArray(bagItContents),
+            CancellationToken.None);
     }
 
-    public async Task WithdrawDatasetVersion(DatasetVersionIdentifier datasetVersion)
+    public async Task WithdrawDatasetVersion(
+        DatasetVersionIdentifier datasetVersion, 
+        CancellationToken cancellationToken)
     {
         bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
-            if (!await VersionHasBeenPublished(datasetVersion))
+            if (!await VersionHasBeenPublished(datasetVersion, cancellationToken))
             {
                 throw new DatasetStatusException();
             }
 
-            await WithdrawDatasetVersionImpl(datasetVersion);
-        });
+            await WithdrawDatasetVersionImpl(datasetVersion, cancellationToken);
+        },
+        cancellationToken);
 
         if (!lockSuccessful)
         {
@@ -205,9 +232,11 @@ public class ServiceImplementation(
         }
     }
 
-    private async Task WithdrawDatasetVersionImpl(DatasetVersionIdentifier datasetVersion)
+    private async Task WithdrawDatasetVersionImpl(
+        DatasetVersionIdentifier datasetVersion,
+        CancellationToken cancellationToken)
     {
-        var bagInfo = await LoadBagInfo(datasetVersion);
+        var bagInfo = await LoadBagInfo(datasetVersion, cancellationToken);
 
         if (bagInfo == null)
         {
@@ -219,18 +248,19 @@ public class ServiceImplementation(
 
         var bagInfoContents = bagInfo.Serialize();
 
-        var tagManifest = await LoadManifest(datasetVersion, false);
+        var tagManifest = await LoadManifest(datasetVersion, false, cancellationToken);
         tagManifest.AddOrUpdateItem(new(bagInfoFileName, SHA256.HashData(bagInfoContents)));
-        await StoreManifest(datasetVersion, false, tagManifest);
+        await StoreManifest(datasetVersion, false, tagManifest, cancellationToken);
 
-        await StoreBagInfo(datasetVersion, bagInfoContents);
+        await StoreBagInfo(datasetVersion, bagInfoContents, CancellationToken.None);
     }
 
     public async Task<Models.File> StoreFile(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
-        FileData data)
+        FileData data,
+        CancellationToken cancellationToken)
     {
         filePath = GetFilePathOrThrow(type, filePath);
         Models.File? result = default;
@@ -242,11 +272,18 @@ public class ServiceImplementation(
 
             lockSuccessful = await lockService.TryLockPath(fullFilePath, async () =>
             {
-                await ThrowIfHasBeenPublished(datasetVersion);
-                result = await StoreFileImpl(datasetVersion, filePath, fullFilePath, data);
-            });
+                await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
+                result = await StoreFileImpl(
+                    datasetVersion, 
+                    filePath, 
+                    fullFilePath, 
+                    data, 
+                    cancellationToken);
+            },
+            cancellationToken);
 
-        });
+        },
+        cancellationToken);
 
         if (!lockSuccessful)
         {
@@ -260,7 +297,8 @@ public class ServiceImplementation(
         DatasetVersionIdentifier datasetVersion,
         string filePath,
         string fullFilePath,
-        FileData data)
+        FileData data,
+        CancellationToken cancellationToken)
     {
         async Task<string?> Deduplicate(byte[] checksum)
         {
@@ -270,7 +308,7 @@ public class ServiceImplementation(
             }
 
             var prevVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, prevVersionNr);
-            var prevManifest = await LoadManifest(prevVersion, true);
+            var prevManifest = await LoadManifest(prevVersion, true, CancellationToken.None);
             var itemsWithEqualChecksum = prevManifest.GetItemsByChecksum(checksum);
 
             if (!itemsWithEqualChecksum.Any())
@@ -278,7 +316,7 @@ public class ServiceImplementation(
                 return null;
             }
 
-            var prevFetch = await LoadFetch(prevVersion);
+            var prevFetch = await LoadFetch(prevVersion, CancellationToken.None);
 
             // If we find an item with equal checksum in fetch.txt, use that URL
             foreach (var candidate in itemsWithEqualChecksum)
@@ -296,7 +334,14 @@ public class ServiceImplementation(
         }
 
         var hashStream = new CountedHashStream(data.Stream);
-        var result = await storageService.StoreFile(fullFilePath, data with { Stream = hashStream });
+        var result = await storageService.StoreFile(
+            fullFilePath, 
+            data with { Stream = hashStream }, 
+            cancellationToken);
+
+        // From this point on we do not want to cancel the operation,
+        // since the file has been successfully stored.
+
         byte[] checksum = hashStream.GetHash();
         long bytesRead = hashStream.BytesRead;
 
@@ -304,17 +349,17 @@ public class ServiceImplementation(
         if (url != null)
         {
             // Deduplication was successful, store in fetch and delete uploaded file
-            await AddOrUpdateFetchItem(datasetVersion, new(filePath, bytesRead, url));
-            await storageService.DeleteFile(fullFilePath);
+            await AddOrUpdateFetchItem(datasetVersion, new(filePath, bytesRead, url), CancellationToken.None);
+            await storageService.DeleteFile(fullFilePath, CancellationToken.None);
         }
         else
         {
             // File is not a duplicate, remove from fetch if present there
-            await RemoveItemFromFetch(datasetVersion, filePath);
+            await RemoveItemFromFetch(datasetVersion, filePath, CancellationToken.None);
         }
 
         // Update payload manifest
-        await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum));
+        await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum), CancellationToken.None);
 
         return ToModelFile(datasetVersion, new(
             ContentType: result.ContentType,
@@ -328,7 +373,8 @@ public class ServiceImplementation(
     public async Task DeleteFile(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
-        string filePath)
+        string filePath,
+        CancellationToken cancellationToken)
     {
         filePath = GetFilePathOrThrow(type, filePath);
 
@@ -339,11 +385,12 @@ public class ServiceImplementation(
 
             lockSuccessful = await lockService.TryLockPath(fullFilePath, async () =>
             {
-                await ThrowIfHasBeenPublished(datasetVersion);
-                await DeleteFileImpl(datasetVersion, filePath, fullFilePath);
-            });
-
-        });
+                await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
+                await DeleteFileImpl(datasetVersion, filePath, fullFilePath, cancellationToken);
+            },
+            cancellationToken);
+        },
+        cancellationToken);
 
         if (!lockSuccessful)
         {
@@ -354,18 +401,24 @@ public class ServiceImplementation(
     private async Task DeleteFileImpl(
         DatasetVersionIdentifier datasetVersion,
         string filePath,
-        string fullFilePath)
+        string fullFilePath,
+        CancellationToken cancellationToken)
     {
-        await storageService.DeleteFile(fullFilePath);
-        await RemoveItemFromPayloadManifest(datasetVersion, filePath);
-        await RemoveItemFromFetch(datasetVersion, filePath);
+        await storageService.DeleteFile(fullFilePath, cancellationToken);
+
+        // From this point on we do not want to cancel the operation,
+        // since the file has been successfully deleted.
+
+        await RemoveItemFromPayloadManifest(datasetVersion, filePath, CancellationToken.None);
+        await RemoveItemFromFetch(datasetVersion, filePath, CancellationToken.None);
     }
 
     public async Task<FileData?> GetFileData(
         DatasetVersionIdentifier datasetVersion,
         FileTypeEnum type,
         string filePath,
-        bool restrictToPubliclyAccessible)
+        bool restrictToPubliclyAccessible,
+        CancellationToken cancellationToken)
     {
         // Should we add some kind of locking here?
         // The requested file could potentially be added to fetch and removed from current version
@@ -380,7 +433,7 @@ public class ServiceImplementation(
             // and file type is either documentation (which entails publically accessible) or
             // access right is public.
 
-            var bagInfo = await LoadBagInfo(datasetVersion);
+            var bagInfo = await LoadBagInfo(datasetVersion, cancellationToken);
 
             if (bagInfo == null)
             {
@@ -394,8 +447,10 @@ public class ServiceImplementation(
             }
         }
 
-        var fetch = await LoadFetch(datasetVersion);
-        var result = await storageService.GetFileData(GetActualFilePath(datasetVersion, fetch, filePath));
+        var fetch = await LoadFetch(datasetVersion, cancellationToken);
+        var result = await storageService.GetFileData(
+            GetActualFilePath(datasetVersion, fetch, filePath), 
+            cancellationToken);
 
         if (result != null && result.ContentType == null)
         {
@@ -405,14 +460,16 @@ public class ServiceImplementation(
         return result;
     }
 
-    public async IAsyncEnumerable<Models.File> ListFiles(DatasetVersionIdentifier datasetVersion)
+    public async IAsyncEnumerable<Models.File> ListFiles(
+        DatasetVersionIdentifier datasetVersion,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // Should we add some kind of locking here?
         // Checksums and fetch can potentially be changed while processing this request,
         // leading to returning faulty checksums and other problems.
 
-        var payloadManifest = await LoadManifest(datasetVersion, true);
-        var fetch = await LoadFetch(datasetVersion);
+        var payloadManifest = await LoadManifest(datasetVersion, true, cancellationToken);
+        var fetch = await LoadFetch(datasetVersion, cancellationToken);
 
         byte[]? GetChecksum(string filePath) =>
             payloadManifest.TryGetItem(filePath, out var value) ? value.Checksum : null;
@@ -430,7 +487,7 @@ public class ServiceImplementation(
             if (payloadPath != previousPayloadPath)
             {
                 dict = [];
-                await foreach (var file in storageService.ListFiles(payloadPath))
+                await foreach (var file in storageService.ListFiles(payloadPath, cancellationToken))
                 {
                     dict[file.Path] = file;
                 }
@@ -441,7 +498,7 @@ public class ServiceImplementation(
             previousPayloadPath = payloadPath;
         }
 
-        await foreach (var file in ListPayloadFiles(datasetVersion))
+        await foreach (var file in ListPayloadFiles(datasetVersion, cancellationToken))
         {
             result.Add(file);
         }
@@ -452,10 +509,14 @@ public class ServiceImplementation(
         }
     }
 
-    public async Task WriteFileDataAsZip(DatasetVersionIdentifier datasetVersion, string[] paths, Stream stream)
+    public async Task WriteFileDataAsZip(
+        DatasetVersionIdentifier datasetVersion, 
+        string[] paths, 
+        Stream stream,
+        CancellationToken cancellationToken)
     {
-        var payloadManifest = await LoadManifest(datasetVersion, true);
-        var fetch = await LoadFetch(datasetVersion);
+        var payloadManifest = await LoadManifest(datasetVersion, true, cancellationToken);
+        var fetch = await LoadFetch(datasetVersion, cancellationToken);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, false);
 
@@ -469,14 +530,14 @@ public class ServiceImplementation(
             }
 
             string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestFilePath);
-            var data = await storageService.GetFileData(actualFilePath);
+            var data = await storageService.GetFileData(actualFilePath, cancellationToken);
 
             if (data != null)
             {
                 var entry = archive.CreateEntry(filePath, CompressionLevel.NoCompression);
                 using var entryStream = entry.Open();
                 using var dataStream = data.Stream;
-                await dataStream.CopyToAsync(entryStream);
+                await dataStream.CopyToAsync(entryStream, cancellationToken);
             }
         }
     }
@@ -560,113 +621,158 @@ public class ServiceImplementation(
         };
     }
 
-    private async Task<BagItManifest> LoadManifest(DatasetVersionIdentifier datasetVersion, bool payloadManifest)
+    private async Task<BagItManifest> LoadManifest(
+        DatasetVersionIdentifier datasetVersion, 
+        bool payloadManifest,
+        CancellationToken cancellationToken)
     {
-        using var fileData = await storageService.GetFileData(GetManifestFilePath(datasetVersion, payloadManifest));
+        using var fileData = await storageService.GetFileData(
+            GetManifestFilePath(datasetVersion, payloadManifest),
+            cancellationToken);
 
         if (fileData == null)
         {
             return new();
         }
 
-        return await BagItManifest.Parse(fileData.Stream);
+        return await BagItManifest.Parse(fileData.Stream, cancellationToken);
     }
 
-    private async Task<BagItFetch> LoadFetch(DatasetVersionIdentifier datasetVersion)
+    private async Task<BagItFetch> LoadFetch(
+        DatasetVersionIdentifier datasetVersion, 
+        CancellationToken cancellationToken)
     {
-        using var fileData = await storageService.GetFileData(GetFetchFilePath(datasetVersion));
+        using var fileData = await storageService.GetFileData
+            (GetFetchFilePath(datasetVersion), 
+            cancellationToken);
 
         if (fileData == null)
         {
             return new();
         }
 
-        return await BagItFetch.Parse(fileData.Stream);
+        return await BagItFetch.Parse(fileData.Stream, cancellationToken);
     }
 
-    private async Task<BagItInfo?> LoadBagInfo(DatasetVersionIdentifier datasetVersion)
+    private async Task<BagItInfo?> LoadBagInfo(DatasetVersionIdentifier datasetVersion, CancellationToken cancellationToken)
     {
-        using var data = await storageService.GetFileData(GetBagInfoFilePath(datasetVersion));
+        using var data = await storageService.GetFileData(
+            GetBagInfoFilePath(datasetVersion), 
+            cancellationToken);
 
         if (data == null)
         {
             return null;
         }
 
-        return await BagItInfo.Parse(data.Stream);
+        return await BagItInfo.Parse(data.Stream, cancellationToken);
     }
 
-    private Task AddOrUpdatePayloadManifestItem(DatasetVersionIdentifier datasetVersion, BagItManifestItem item) =>
-        LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.AddOrUpdateItem(item));
+    private Task AddOrUpdatePayloadManifestItem(
+        DatasetVersionIdentifier datasetVersion, 
+        BagItManifestItem item,
+        CancellationToken cancellationToken) =>
+        LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.AddOrUpdateItem(item), cancellationToken);
 
-    private Task AddOrUpdateFetchItem(DatasetVersionIdentifier datasetVersion, BagItFetchItem item) =>
-        LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item));
+    private Task AddOrUpdateFetchItem(
+        DatasetVersionIdentifier datasetVersion, 
+        BagItFetchItem item,
+        CancellationToken cancellationToken) =>
+        LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item), cancellationToken);
 
-    private Task RemoveItemFromPayloadManifest(DatasetVersionIdentifier datasetVersion, string filePath) =>
-        LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.RemoveItem(filePath));
+    private Task RemoveItemFromPayloadManifest(
+        DatasetVersionIdentifier datasetVersion, 
+        string filePath,
+        CancellationToken cancellationToken) =>
+        LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.RemoveItem(filePath), cancellationToken);
 
-    private Task RemoveItemFromFetch(DatasetVersionIdentifier datasetVersion, string filePath) =>
-        LockAndUpdateFetch(datasetVersion, fetch => fetch.RemoveItem(filePath));
+    private Task RemoveItemFromFetch(
+        DatasetVersionIdentifier datasetVersion, 
+        string filePath,
+        CancellationToken cancellationToken) =>
+        LockAndUpdateFetch(datasetVersion, fetch => fetch.RemoveItem(filePath), cancellationToken);
 
-    private async Task LockAndUpdatePayloadManifest(DatasetVersionIdentifier datasetVersion, Func<BagItManifest, bool> action)
+    private async Task LockAndUpdatePayloadManifest(
+        DatasetVersionIdentifier datasetVersion, 
+        Func<BagItManifest, bool> action,
+        CancellationToken cancellationToken)
     {
         // This method assumes that there is no exlusive lock on datasetVersion
 
-        using (await lockService.LockPath(GetManifestFilePath(datasetVersion, true)))
+        using (await lockService.LockPath(GetManifestFilePath(datasetVersion, true), cancellationToken))
         {
-            var manifest = await LoadManifest(datasetVersion, true);
+            var manifest = await LoadManifest(datasetVersion, true, cancellationToken);
 
             if (action(manifest))
             {
-                await StoreManifest(datasetVersion, true, manifest);
+                await StoreManifest(datasetVersion, true, manifest, cancellationToken);
             }
         }
     }
 
-    private async Task LockAndUpdateFetch(DatasetVersionIdentifier datasetVersion, Func<BagItFetch, bool> action)
+    private async Task LockAndUpdateFetch(
+        DatasetVersionIdentifier datasetVersion, 
+        Func<BagItFetch, bool> action,
+        CancellationToken cancellationToken)
     {
         // This method assumes that there is no exlusive lock on datasetVersion
 
-        using (await lockService.LockPath(GetFullFilePath(datasetVersion, fetchFileName)))
+        using (await lockService.LockPath(GetFullFilePath(datasetVersion, fetchFileName), cancellationToken))
         {
-            var fetch = await LoadFetch(datasetVersion);
+            var fetch = await LoadFetch(datasetVersion, cancellationToken);
 
             if (action(fetch))
             {
-                await StoreFetch(datasetVersion, fetch);
+                await StoreFetch(datasetVersion, fetch, cancellationToken);
             }
         }
     }
 
-    private Task StoreManifest(DatasetVersionIdentifier datasetVersion, bool payload, BagItManifest manifest)
+    private Task StoreManifest(
+        DatasetVersionIdentifier datasetVersion,
+        bool payload,
+        BagItManifest manifest,
+        CancellationToken cancellationToken)
     {
         string filePath = GetManifestFilePath(datasetVersion, payload);
 
         if (manifest.Items.Any())
         {
-            return storageService.StoreFile(filePath, CreateFileDataFromByteArray(manifest.Serialize()));
+            return storageService.StoreFile(
+                filePath, 
+                CreateFileDataFromByteArray(manifest.Serialize()), 
+                cancellationToken);
         }
 
-        return storageService.DeleteFile(filePath);
+        return storageService.DeleteFile(filePath, cancellationToken);
     }
 
-    private Task StoreFetch(DatasetVersionIdentifier datasetVersion, BagItFetch fetch)
+    private Task StoreFetch(
+        DatasetVersionIdentifier datasetVersion, 
+        BagItFetch fetch,
+        CancellationToken cancellationToken)
     {
         string filePath = GetFetchFilePath(datasetVersion);
 
         if (fetch.Items.Any())
         {
-            return storageService.StoreFile(filePath, CreateFileDataFromByteArray(fetch.Serialize()));
+            return storageService.StoreFile(
+                filePath, 
+                CreateFileDataFromByteArray(fetch.Serialize()),
+                cancellationToken);
         }
 
-        return storageService.DeleteFile(filePath);
+        return storageService.DeleteFile(filePath, cancellationToken);
     }
 
-    private Task<StorageServiceFileBase> StoreBagInfo(DatasetVersionIdentifier datasetVersion, byte[] contents)
+    private Task<StorageServiceFileBase> StoreBagInfo(
+        DatasetVersionIdentifier datasetVersion,
+        byte[] contents,
+        CancellationToken cancellationToken)
     {
         string filePath = GetBagInfoFilePath(datasetVersion);
 
-        return storageService.StoreFile(filePath, CreateFileDataFromByteArray(contents));
+        return storageService.StoreFile(filePath, CreateFileDataFromByteArray(contents), cancellationToken);
     }
 
     private static string GetActualFilePath(DatasetVersionIdentifier datasetVersion, BagItFetch fetch, string filePath)
@@ -679,11 +785,13 @@ public class ServiceImplementation(
         return GetFullFilePath(datasetVersion, filePath);
     }
 
-    private async IAsyncEnumerable<StorageServiceFile> ListPayloadFiles(DatasetVersionIdentifier datasetVersion)
+    private async IAsyncEnumerable<StorageServiceFile> ListPayloadFiles(
+        DatasetVersionIdentifier datasetVersion,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         string path = GetDatasetVersionPath(datasetVersion);
 
-        await foreach (var file in storageService.ListFiles(path + "data/"))
+        await foreach (var file in storageService.ListFiles(path + "data/", cancellationToken))
         {
             yield return file with { Path = file.Path[path.Length..] };
         }
@@ -692,16 +800,16 @@ public class ServiceImplementation(
     private static FileData CreateFileDataFromByteArray(byte[] data) =>
         new(new MemoryStream(data), data.LongLength, "text/plain");
 
-    private async Task<bool> VersionHasBeenPublished(DatasetVersionIdentifier datasetVersion)
+    private async Task<bool> VersionHasBeenPublished(DatasetVersionIdentifier datasetVersion, CancellationToken cancellationToken)
     {
-        using var data = await storageService.GetFileData(GetBagItFilePath(datasetVersion));
+        using var data = await storageService.GetFileData(GetBagItFilePath(datasetVersion), cancellationToken);
 
         return data != null;
     }
 
-    private async Task ThrowIfHasBeenPublished(DatasetVersionIdentifier datasetVersion)
+    private async Task ThrowIfHasBeenPublished(DatasetVersionIdentifier datasetVersion, CancellationToken cancellationToken)
     {
-        if (await VersionHasBeenPublished(datasetVersion))
+        if (await VersionHasBeenPublished(datasetVersion, cancellationToken))
         {
             throw new DatasetStatusException();
         }

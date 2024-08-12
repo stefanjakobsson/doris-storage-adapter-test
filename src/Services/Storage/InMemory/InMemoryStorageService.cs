@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.InMemory;
@@ -8,23 +10,30 @@ internal class InMemoryStorageService(InMemoryStorage storage) : IStorageService
 {
     private readonly InMemoryStorage storage = storage;
 
-    public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
+    public async Task<StorageServiceFileBase> StoreFile(
+        string filePath, 
+        FileData data,
+        CancellationToken cancellationToken)
     {
         using var memoryStream = new MemoryStream();
-        await data.Stream.CopyToAsync(memoryStream);
+        await data.Stream.CopyToAsync(memoryStream, cancellationToken);
         var byteArray = memoryStream.ToArray();
 
         return storage.AddOrUpdate(filePath, byteArray, data.ContentType).Metadata;
     }
 
-    public Task DeleteFile(string filePath)
+    public Task DeleteFile(string filePath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         storage.Remove(filePath);
         return Task.CompletedTask;
     }
 
-    public Task<FileData?> GetFileData(string filePath)
+    public Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (storage.TryGet(filePath, out var file))
         {
             return Task.FromResult<FileData?>(new(
@@ -36,14 +45,17 @@ internal class InMemoryStorageService(InMemoryStorage storage) : IStorageService
         return Task.FromResult<FileData?>(null);
     }
 
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
+#pragma warning disable 1998
+    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+        string path,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // This is a hack to avoid warning CS1998 (async method without await)
-        await Task.CompletedTask;
-
         foreach (var f in storage.ListFiles(path))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             yield return f.Metadata;
         }
     }
+#pragma warning restore 1998
 }

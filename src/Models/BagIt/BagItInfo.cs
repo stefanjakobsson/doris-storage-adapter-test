@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Models.BagIt;
@@ -140,7 +141,7 @@ public class BagItInfo
         return default;
     }
 
-    public static async Task<BagItInfo> Parse(Stream stream)
+    public static async Task<BagItInfo> Parse(Stream stream, CancellationToken cancellationToken)
     {
         var result = new BagItInfo();
 
@@ -167,7 +168,7 @@ public class BagItInfo
             }
         }
 
-        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
         {
             if (line.StartsWith(' ') || line.StartsWith('\t'))
             {

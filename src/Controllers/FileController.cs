@@ -12,6 +12,8 @@ using Swashbuckle.AspNetCore.Annotations;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Controllers;
@@ -41,7 +43,8 @@ public class FileController(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
-        [FromQuery, BindRequired] string filePath)
+        [FromQuery, BindRequired] string filePath,
+        CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -59,7 +62,8 @@ public class FileController(
             datasetVersion, type, filePath, new(
                 Stream: Request.Body, 
                 Length: Request.Headers.ContentLength.Value, 
-                ContentType: Request.Headers.ContentType));
+                ContentType: Request.Headers.ContentType),
+            cancellationToken);
 
         return TypedResults.Ok(result);
     }
@@ -76,7 +80,8 @@ public class FileController(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
-        [FromQuery, BindRequired] string filePath)
+        [FromQuery, BindRequired] string filePath,
+        CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -85,7 +90,7 @@ public class FileController(
             return TypedResults.Forbid();
         }
 
-        await appService.DeleteFile(datasetVersion, type, filePath);
+        await appService.DeleteFile(datasetVersion, type, filePath, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -101,7 +106,8 @@ public class FileController(
         string datasetIdentifier,
         string versionNumber,
         FileTypeEnum type,
-        [FromQuery, BindRequired] string filePath)
+        [FromQuery, BindRequired] string filePath,
+        CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
         bool restrictToPubliclyAccessible = true;
@@ -121,7 +127,8 @@ public class FileController(
             restrictToPubliclyAccessible = false;
         }
 
-        var fileData = await appService.GetFileData(datasetVersion, type, filePath, restrictToPubliclyAccessible);
+        var fileData = await appService.GetFileData(
+            datasetVersion, type, filePath, restrictToPubliclyAccessible, cancellationToken);
 
         if (fileData == null)
         {
@@ -143,7 +150,8 @@ public class FileController(
     public Results<PushStreamHttpResult, ForbidHttpResult> GetFileDataAsZip(
         string datasetIdentifier,
         string versionNumber,
-        [FromQuery] string[] path)
+        [FromQuery] string[] path,
+        CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
@@ -153,8 +161,13 @@ public class FileController(
         }
 
         return TypedResults.Stream(_ => 
-            appService.WriteFileDataAsZip(datasetVersion, path, Response.BodyWriter.AsStream()),
-            MediaTypeNames.Application.Zip, datasetIdentifier + "-" + versionNumber + ".zip");
+            appService.WriteFileDataAsZip(
+                datasetVersion, 
+                path, 
+                Response.BodyWriter.AsStream(),
+                cancellationToken),
+            MediaTypeNames.Application.Zip, 
+            datasetIdentifier + "-" + versionNumber + ".zip");
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}")]
@@ -163,11 +176,14 @@ public class FileController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public async IAsyncEnumerable<File> ListFiles(string datasetIdentifier, string versionNumber)
+    public async IAsyncEnumerable<File> ListFiles(
+        string datasetIdentifier, 
+        string versionNumber,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await foreach (var file in appService.ListFiles(datasetVersion))
+        await foreach (var file in appService.ListFiles(datasetVersion, cancellationToken))
         {
             yield return file;
         }

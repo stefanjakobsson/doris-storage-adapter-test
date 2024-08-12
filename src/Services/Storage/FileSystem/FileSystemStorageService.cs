@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.FileSystem;
@@ -20,7 +22,10 @@ internal class FileSystemStorageService(
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
-    public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
+    public async Task<StorageServiceFileBase> StoreFile(
+        string filePath, 
+        FileData data,
+        CancellationToken cancellationToken)
     {
         filePath = GetFullPathOrThrow(filePath);
 
@@ -39,10 +44,10 @@ internal class FileSystemStorageService(
         {
             using (var stream = new FileStream(tempFile, FileMode.Create))
             {
-                await data.Stream.CopyToAsync(stream);
+                await data.Stream.CopyToAsync(stream, cancellationToken);
             }
 
-            await CreateDirectory(directoryPath);
+            await CreateDirectory(directoryPath, cancellationToken);
 
             fileInfo = new FileInfo(filePath);
             if (fileInfo.Exists)
@@ -58,7 +63,7 @@ internal class FileSystemStorageService(
             try
             {
                 File.Delete(tempFile);
-                await DeleteEmptyDirectories(directoryPath);
+                await DeleteEmptyDirectories(directoryPath, CancellationToken.None);
             }
             catch { }
 
@@ -86,8 +91,10 @@ internal class FileSystemStorageService(
             DateModified: fileInfo.LastWriteTimeUtc);
     }
 
-    public async Task DeleteFile(string filePath)
+    public async Task DeleteFile(string filePath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         filePath = GetFullPathOrThrow(filePath);
 
         File.Delete(filePath);
@@ -95,7 +102,7 @@ internal class FileSystemStorageService(
         try
         {
             // Delete any empty subdirectories that result from deleting the file
-            await DeleteEmptyDirectories(Path.GetDirectoryName(filePath)!);
+            await DeleteEmptyDirectories(Path.GetDirectoryName(filePath)!, CancellationToken.None);
         }
         catch
         {
@@ -104,8 +111,10 @@ internal class FileSystemStorageService(
         }
     }
 
-    public Task<FileData?> GetFileData(string filePath)
+    public Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         filePath = GetFullPathOrThrow(filePath);
 
         if (!File.Exists(filePath))
@@ -120,11 +129,11 @@ internal class FileSystemStorageService(
             ContentType: null));
     }
 
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
+#pragma warning disable 1998
+    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+        string path,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // This is a hack to avoid warning CS1998 (async method without await)
-        await Task.CompletedTask;
-
         static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo directory, string path)
         {
             foreach (var entry in directory.EnumerateFileSystemInfos())
@@ -148,6 +157,7 @@ internal class FileSystemStorageService(
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
 
         path = GetFullPathOrThrow(path);
         var directory = new DirectoryInfo(path);
@@ -164,6 +174,8 @@ internal class FileSystemStorageService(
 
         foreach (var file in EnumerateFiles(directory, directory.FullName != path ? path : ""))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var relativePath = Path.GetRelativePath(basePath, file.FullName);
 
             yield return new(
@@ -174,6 +186,7 @@ internal class FileSystemStorageService(
               Length: file.Length);
         }
     }
+#pragma warning restore 1998
 
     private string GetFullPathOrThrow(string path)
     {
@@ -217,11 +230,12 @@ internal class FileSystemStorageService(
         return relativePath;
     }
 
-    private Task<IDisposable> LockPath(string directoryPath) => lockService.LockPath(GetLockPath(directoryPath));
+    private Task<IDisposable> LockPath(string directoryPath, CancellationToken cancellationToken) => 
+        lockService.LockPath(GetLockPath(directoryPath), cancellationToken);
 
-    private async Task CreateDirectory(string directoryPath)
+    private async Task CreateDirectory(string directoryPath, CancellationToken cancellationToken)
     {
-        using (await LockPath(directoryPath))
+        using (await LockPath(directoryPath, cancellationToken))
         {
             if (!Directory.Exists(directoryPath))
             {
@@ -230,9 +244,9 @@ internal class FileSystemStorageService(
         }
     }
 
-    private async Task DeleteEmptyDirectories(string directoryPath)
+    private async Task DeleteEmptyDirectories(string directoryPath, CancellationToken cancellationToken)
     {
-        using (await LockPath(directoryPath))
+        using (await LockPath(directoryPath, cancellationToken))
         {
             DirectoryInfo? directory = new(directoryPath);
             while

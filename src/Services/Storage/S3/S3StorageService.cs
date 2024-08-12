@@ -3,6 +3,8 @@ using Amazon.S3.Transfer;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.S3;
@@ -14,7 +16,10 @@ internal class S3StorageService(
     private readonly IAmazonS3 client = client;
     private readonly S3StorageServiceConfiguration configuration = configuration.Value;
 
-    public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data)
+    public async Task<StorageServiceFileBase> StoreFile(
+        string filePath, 
+        FileData data,
+        CancellationToken cancellationToken)
     {
         var utility = new TransferUtility(client, new()
         {
@@ -31,7 +36,7 @@ internal class S3StorageService(
             PartSize = configuration.MultiPartUploadChunkSize
         };
 
-        await utility.UploadAsync(request);
+        await utility.UploadAsync(request, cancellationToken);
         
         return new(
             ContentType: null,
@@ -42,16 +47,17 @@ internal class S3StorageService(
             DateModified: DateTime.UtcNow);
     }
 
-    public async Task DeleteFile(string filePath)
+    public async Task DeleteFile(string filePath, CancellationToken cancellationToken)
     {
         await client.DeleteObjectAsync(new()
         {
             BucketName = configuration.BucketName,
             Key = filePath
-        });
+        },
+        cancellationToken);
     }
 
-    public async Task<FileData?> GetFileData(string filePath)
+    public async Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
     {
         try
         {
@@ -59,7 +65,8 @@ internal class S3StorageService(
             {
                 BucketName = configuration.BucketName,
                 Key = filePath
-            });
+            }, 
+            cancellationToken);
 
             return new(
                 Stream: response.ResponseStream,
@@ -77,7 +84,9 @@ internal class S3StorageService(
         }
     }
 
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(string path)
+    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+        string path,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var paginator = client.Paginators.ListObjectsV2(new()
         {
@@ -85,7 +94,7 @@ internal class S3StorageService(
             Prefix = path
         });
 
-        await foreach (var file in paginator.S3Objects)
+        await foreach (var file in paginator.S3Objects.WithCancellation(cancellationToken))
         {
             yield return new(
                 ContentType: null,

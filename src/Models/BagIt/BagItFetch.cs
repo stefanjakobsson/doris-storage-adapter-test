@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Models.BagIt;
@@ -11,13 +12,13 @@ public class BagItFetch
 {
     private readonly SortedDictionary<string, BagItFetchItem> items = new(StringComparer.InvariantCulture);
 
-    public static async Task<BagItFetch> Parse(Stream stream)
+    public static async Task<BagItFetch> Parse(Stream stream, CancellationToken cancellationToken)
     {
         var result = new BagItFetch();
 
         var reader = new StreamReader(stream, Encoding.UTF8);
         string? line;
-        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
         {
             int index1 = line.IndexOf(' ');
             string url = line[..index1];

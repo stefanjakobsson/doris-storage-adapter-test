@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Models.BagIt;
@@ -12,13 +13,13 @@ public class BagItManifest
     private readonly SortedDictionary<string, BagItManifestItem> items = new(StringComparer.InvariantCulture);
     private readonly Dictionary<byte[], List<BagItManifestItem>> checksumToItems = new(ByteArrayComparer.Default);
 
-    public static async Task<BagItManifest> Parse(Stream stream)
+    public static async Task<BagItManifest> Parse(Stream stream, CancellationToken cancellationToken)
     {
         var result = new BagItManifest();
 
         var reader = new StreamReader(stream, Encoding.UTF8);
         string? line;
-        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
         {
             int index = line.IndexOf(' ');
             string checksum = line[..index];
