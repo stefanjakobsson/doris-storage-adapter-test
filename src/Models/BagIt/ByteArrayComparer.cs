@@ -8,7 +8,7 @@ namespace DorisStorageAdapter.Models.BagIt;
 ///    are equal to each other based on the value sequences contained within
 ///    the arrays.
 /// </summary>
-public class ByteArrayComparer : IEqualityComparer<byte[]>
+internal class ByteArrayComparer : IEqualityComparer<byte[]>
 {
     //    Private backing field for the Default property below.
     private static readonly ByteArrayComparer _default = new();
