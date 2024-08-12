@@ -121,7 +121,6 @@ internal class CountedHashStream(Stream underlyingStream) : Stream
 
     public override void Write(ReadOnlySpan<byte> buffer) => underlyingStream.Write(buffer);
 
-    /// <inheritdoc/>
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
         underlyingStream.WriteAsync(buffer, cancellationToken);
 
