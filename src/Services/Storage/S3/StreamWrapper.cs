@@ -74,7 +74,12 @@ internal class StreamWrapper(Stream underlyingStream, long length) : Stream
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
+#pragma warning disable IDE0079
+#pragma warning disable CA1835
         var bytesRead = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+#pragma warning restore IDE0079
+#pragma warning restore CA1835
+
         position += bytesRead;
         return bytesRead;
     }

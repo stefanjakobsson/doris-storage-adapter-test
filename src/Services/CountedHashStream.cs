@@ -94,7 +94,11 @@ internal class CountedHashStream(Stream underlyingStream) : Stream
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
+#pragma warning disable IDE0079
+#pragma warning disable CA1835
         var bytesRead = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+#pragma warning disable CA1835
+#pragma warning restore IDE0079
 
         this.bytesRead += bytesRead;
         sha256.AppendData(buffer, offset, bytesRead);
