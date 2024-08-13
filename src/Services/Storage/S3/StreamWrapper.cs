@@ -65,7 +65,7 @@ internal class StreamWrapper(Stream underlyingStream, long length) : Stream
         return bytesRead;
     }
 
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {
         int bytesRead = await underlyingStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
         position += bytesRead;

@@ -82,7 +82,7 @@ internal class CountedHashStream(Stream underlyingStream) : Stream
         return bytesRead;
     }
 
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {
         int bytesRead = await underlyingStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
 
@@ -125,7 +125,7 @@ internal class CountedHashStream(Stream underlyingStream) : Stream
 
     public override void Write(ReadOnlySpan<byte> buffer) => underlyingStream.Write(buffer);
 
-    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken) =>
         underlyingStream.WriteAsync(buffer, cancellationToken);
 
     public override void Write(byte[] buffer, int offset, int count) => underlyingStream.Write(buffer, offset, count);
