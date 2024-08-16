@@ -9,9 +9,9 @@
 
   <ItemGroup>
     <PackageReference Include="AsyncKeyedLock" Version="7.0.0" />
-    <PackageReference Include="AWSSDK.S3" Version="3.7.400.4" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.401" />
     <PackageReference Include="ByteSize" Version="2.1.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
     <PackageReference Include="MimeTypes" Version="2.5.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
