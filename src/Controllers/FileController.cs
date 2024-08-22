@@ -31,6 +31,9 @@ public class FileController(
     [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     [DisableRequestSizeLimit] // Disable request size limit to allow streaming large files
+    // DisableFormValueModelBinding makes sure that ASP.NET does not try to parse the body as form data
+    // when Content-Type is "multipart/form-data" or "application/x-www-form-urlencoded".
+    [DisableFormValueModelBinding] 
     [EnableCors(nameof(StoreFile))]
     [BinaryRequestBody("*/*")]
     [ProducesResponseType<File>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
