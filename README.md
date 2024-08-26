@@ -1,3 +1,3 @@
-# Doris Storage Adapter
+# DORIS Storage Adapter
 
 Documentation to be done.
