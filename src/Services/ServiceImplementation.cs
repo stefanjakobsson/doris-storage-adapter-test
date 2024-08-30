@@ -137,10 +137,9 @@ public class ServiceImplementation(
                 return null;
             }
 
-            using var sha256 = SHA256.Create();
-            using var hashStream = new CryptoStream(fileData.Stream, sha256, CryptoStreamMode.Read);
+            using var hashStream = new CountedHashStream(fileData.Stream);
 
-            return (await func(hashStream, cancellationToken), sha256.Hash!);
+            return (await func(hashStream, cancellationToken), hashStream.GetHash());
         }
 
         Task<(BagItManifest Manifest, byte[] Checksum)?> LoadManifestWithChecksum() =>
