@@ -68,10 +68,10 @@ public class ServiceImplementation(
             }
         }
 
-        if (await storageService.ListFiles(GetDatasetVersionPath(datasetVersion), cancellationToken)
+        if (await ListPayloadFiles(datasetVersion, cancellationToken)
                 .GetAsyncEnumerator(cancellationToken).MoveNextAsync())
         {
-            // Files are already present for datasetVersion, abort
+            // Payload files present, abort
             return;
         }
 
