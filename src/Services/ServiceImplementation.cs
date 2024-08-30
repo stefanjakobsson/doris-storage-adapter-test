@@ -86,8 +86,6 @@ public class ServiceImplementation(
 
         await CopyPayloadManifest(previousVersion, datasetVersion);
 
-        // Should we cancel from here on? If so we need to clean up state.
-
         string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
 
         foreach (var item in fetch.Items)
