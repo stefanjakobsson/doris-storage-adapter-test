@@ -15,11 +15,13 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
 {
     private readonly Stream underlyingStream = underlyingStream;
     private long bytesRead;
-    private readonly IncrementalHash sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    private readonly IncrementalHash sha256hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    private byte[] hashValue = [];
+    private bool isDisposed;
 
     public long BytesRead => bytesRead;
 
-    public byte[] GetHash() => sha256.GetCurrentHash();
+    public byte[] GetHash() => isDisposed ? hashValue : sha256hasher.GetCurrentHash();
 
     public override bool CanRead => underlyingStream.CanRead;
     public override bool CanSeek => underlyingStream.CanSeek;
@@ -46,22 +48,53 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
     }
     public override void Close()
     {
-        underlyingStream.Close();
-        base.Close();
+        try
+        {
+            underlyingStream.Close();
+        }
+        finally
+        {
+            base.Close();
+        }
+    }
+
+    private void DisposeSha256Hasher()
+    {
+        hashValue = sha256hasher.GetCurrentHash();
+        sha256hasher.Dispose();
     }
 
     protected override void Dispose(bool disposing)
     {
-        sha256.Dispose();
-        underlyingStream.Dispose();
-        base.Dispose(disposing);
+        try
+        {
+            if (disposing && !isDisposed)
+            {
+                DisposeSha256Hasher();
+                isDisposed = true;
+
+                underlyingStream.Dispose();
+            }
+        }
+        finally
+        {
+            base.Dispose(disposing);
+        }
     }
 
     public async override ValueTask DisposeAsync()
     {
-        sha256.Dispose();
-        await underlyingStream.DisposeAsync().ConfigureAwait(false);
-        await base.DisposeAsync().ConfigureAwait(false);
+        try
+        {
+            DisposeSha256Hasher();
+            isDisposed = true;
+
+            await underlyingStream.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     public override void Flush() => underlyingStream.Flush();
@@ -73,7 +106,7 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
         int bytesRead = underlyingStream.Read(buffer);
 
         this.bytesRead += bytesRead;
-        sha256.AppendData(buffer[..bytesRead]);
+        sha256hasher.AppendData(buffer[..bytesRead]);
 
         return bytesRead;
     }
@@ -83,7 +116,7 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
         int bytesRead = underlyingStream.Read(buffer, offset, count);
 
         this.bytesRead += bytesRead;
-        sha256.AppendData(buffer, offset, bytesRead);
+        sha256hasher.AppendData(buffer, offset, bytesRead);
 
         return bytesRead;
     }
@@ -93,7 +126,7 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
         int bytesRead = await underlyingStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
 
         this.bytesRead += bytesRead;
-        sha256.AppendData(buffer[..bytesRead].Span);
+        sha256hasher.AppendData(buffer[..bytesRead].Span);
 
         return bytesRead;
     }
@@ -107,7 +140,7 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
 #pragma warning restore IDE0079
 
         this.bytesRead += bytesRead;
-        sha256.AppendData(buffer, offset, bytesRead);
+        sha256hasher.AppendData(buffer, offset, bytesRead);
 
         return bytesRead;
     }
@@ -119,7 +152,7 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
         if (result > 0)
         {
             bytesRead++;
-            sha256.AppendData([ (byte)result ]);
+            sha256hasher.AppendData([ (byte)result ]);
         }
 
         return result;
