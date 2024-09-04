@@ -97,7 +97,13 @@ internal class FileSystemStorageService(
 
         filePath = GetFullPathOrThrow(filePath);
 
-        File.Delete(filePath);
+        try
+        {
+            File.Delete(filePath);
+        }
+        catch (DirectoryNotFoundException)
+        { }
+
 
         try
         {
