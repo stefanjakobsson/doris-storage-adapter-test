@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="AsyncKeyedLock" Version="7.0.1" />
-    <PackageReference Include="AWSSDK.S3" Version="3.7.402.3" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.402.5" />
     <PackageReference Include="ByteSize" Version="2.1.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
     <PackageReference Include="MimeTypes" Version="2.5.2">
