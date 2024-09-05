@@ -29,13 +29,7 @@ internal class FileSystemStorageService(
     {
         filePath = GetFullPathOrThrow(filePath);
 
-        string tempFile;
-        do
-        {
-            tempFile = Path.Combine(tempFilePath, Path.GetRandomFileName());
-        }
-        while (File.Exists(tempFile));
-
+        string tempFile = Guid.NewGuid().ToString();
         string directoryPath = Path.GetDirectoryName(filePath)!;
         FileInfo fileInfo;
         DateTime? dateCreated = null;
