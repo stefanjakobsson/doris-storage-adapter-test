@@ -32,8 +32,15 @@ internal class S3StorageService(
             AutoResetStreamPosition = false,
             BucketName = configuration.BucketName,
             Key = filePath,
-            InputStream = new StreamWrapper(data.Stream, data.Length),
-            PartSize = configuration.MultiPartUploadChunkSize
+
+            // This is a workaround to make sure that TransferUtility does not synchronously read
+            // from data.Stream, which (for some reason) happens if the stream is empty. Trying to
+            // read synchrounously triggers an ASP.NET core error unless AllowSynchronousIO is set to true.
+            //
+            // If length is 0 we replace the input stream with Stream.Null which does not throw on synchronous reads.
+            InputStream = data.Length == 0 ? System.IO.Stream.Null : new StreamWrapper(data.Stream, data.Length),
+
+            PartSize = configuration.MultiPartUploadChunkSize,
         };
 
         await utility.UploadAsync(request, cancellationToken);
