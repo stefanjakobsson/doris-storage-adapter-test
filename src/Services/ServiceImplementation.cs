@@ -521,7 +521,8 @@ public class ServiceImplementation(
         {
             string filePath = manifestFilePath[5..]; // Strip "data/"
 
-            if (paths.Length > 0 && !paths.Any(filePath.StartsWith))
+            if (paths.Length > 0 && 
+                !paths.Any(p => filePath.StartsWith(p, StringComparison.Ordinal)))
             {
                 continue;
             }
@@ -592,12 +593,12 @@ public class ServiceImplementation(
         FileTypeEnum type = default;
         string name = "";
 
-        if (file.Path.StartsWith("data/data/"))
+        if (file.Path.StartsWith("data/data/", StringComparison.Ordinal))
         {
             type = FileTypeEnum.data;
             name = file.Path["data/data/".Length..];
         }
-        else if (file.Path.StartsWith("data/documentation/"))
+        else if (file.Path.StartsWith("data/documentation/", StringComparison.Ordinal))
         {
             type = FileTypeEnum.documentation;
             name = file.Path["data/documentation/".Length..];

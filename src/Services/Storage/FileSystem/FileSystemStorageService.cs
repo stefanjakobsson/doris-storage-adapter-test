@@ -138,7 +138,7 @@ internal class FileSystemStorageService(
         {
             foreach (var entry in directory.EnumerateFileSystemInfos())
             {
-                if (path != "" && !entry.FullName.StartsWith(path))
+                if (path != "" && !entry.FullName.StartsWith(path, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -199,7 +199,7 @@ internal class FileSystemStorageService(
 
         string result = Path.GetFullPath(path, basePath);
 
-        if (!result.StartsWith(basePath))
+        if (!result.StartsWith(basePath, StringComparison.Ordinal))
         {
             Throw();
         }

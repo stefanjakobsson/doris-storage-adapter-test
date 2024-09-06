@@ -35,5 +35,5 @@ internal class InMemoryStorage
         files.TryGetValue(filePath, out file);
 
     public IEnumerable<InMemoryFile> ListFiles(string path) =>
-        files.Where(f => f.Key.StartsWith(path)).Select(f => f.Value);
+        files.Where(f => f.Key.StartsWith(path, StringComparison.Ordinal)).Select(f => f.Value);
 }
