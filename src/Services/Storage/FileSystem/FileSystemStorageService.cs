@@ -53,7 +53,7 @@ internal class FileSystemStorageService(
         }
         catch
         {
-            // Failed, try to clean up
+            // Cancelled or failed, try to clean up
             try
             {
                 File.Delete(tempFile);
@@ -106,8 +106,8 @@ internal class FileSystemStorageService(
         }
         catch
         {
-            // Ignore errors here since file has been successfully removed
-            // and removing empty directories is not crucial
+            // Ignore errors here since file has been successfully deleted
+            // and deleting empty directories is not crucial
         }
     }
 
