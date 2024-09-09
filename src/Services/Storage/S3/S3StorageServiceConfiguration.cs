@@ -5,6 +5,7 @@ namespace DorisStorageAdapter.Services.Storage.S3;
 internal record S3StorageServiceConfiguration
 {
     [Required]
+    [Url]
     public required string ServiceUrl { get; init; }
     [Required]
     public required string BucketName { get; init; }
