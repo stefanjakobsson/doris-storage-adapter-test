@@ -23,7 +23,7 @@ internal class FileSystemStorageService(
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
     public async Task<StorageServiceFileBase> StoreFile(
-        string filePath, 
+        string filePath,
         FileData data,
         CancellationToken cancellationToken)
     {
@@ -73,7 +73,7 @@ internal class FileSystemStorageService(
                 fileInfo.CreationTimeUtc = dateCreated.Value;
             }
         }
-        catch 
+        catch
         {
             // Ignore errors here since file has been successfully stored
             // and updating creation time is not crucial
@@ -96,8 +96,9 @@ internal class FileSystemStorageService(
             File.Delete(filePath);
         }
         catch (DirectoryNotFoundException)
-        { }
-
+        {
+            return;
+        }
 
         try
         {
@@ -117,12 +118,23 @@ internal class FileSystemStorageService(
 
         filePath = GetFullPathOrThrow(filePath);
 
+        // Explicitly check for existence, since that is much faster
+        // than letting FileStream constructor throw FileNotFoundException
         if (!File.Exists(filePath))
         {
             return Task.FromResult<FileData?>(null);
         }
+        
+        Stream stream;
+        try
+        {
+            stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        }
+        catch (FileNotFoundException)
+        {
+            return Task.FromResult<FileData?>(null);
+        }
 
-        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
         return Task.FromResult<FileData?>(new(
             Stream: stream,
             Length: stream.Length,
@@ -230,17 +242,14 @@ internal class FileSystemStorageService(
         return relativePath;
     }
 
-    private Task<IDisposable> LockPath(string directoryPath, CancellationToken cancellationToken) => 
+    private Task<IDisposable> LockPath(string directoryPath, CancellationToken cancellationToken) =>
         lockService.LockPath(GetLockPath(directoryPath), cancellationToken);
 
     private async Task CreateDirectory(string directoryPath, CancellationToken cancellationToken)
     {
         using (await LockPath(directoryPath, cancellationToken))
         {
-            if (!Directory.Exists(directoryPath))
-            {
-                Directory.CreateDirectory(directoryPath);
-            }
+            Directory.CreateDirectory(directoryPath);
         }
     }
 
@@ -248,16 +257,20 @@ internal class FileSystemStorageService(
     {
         using (await LockPath(directoryPath, cancellationToken))
         {
-            DirectoryInfo? directory = new(directoryPath);
-            while
-            (
-                directory != null &&
-                directory.FullName != basePath &&
-                !directory.EnumerateFileSystemInfos().Any()
-            )
+            while (directoryPath != basePath)
             {
-                directory.Delete(false);
-                directory = directory.Parent;
+                try
+                {
+                    if (Directory.EnumerateFileSystemEntries(directoryPath).Any())
+                    {
+                        return;
+                    }
+
+                    Directory.Delete(directoryPath);
+                }
+                catch (DirectoryNotFoundException) { }
+
+                directoryPath = Path.GetDirectoryName(directoryPath)!;
             }
         }
     }
