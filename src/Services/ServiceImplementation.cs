@@ -512,31 +512,48 @@ public class ServiceImplementation(
         Stream stream,
         CancellationToken cancellationToken)
     {
+        static Stream CreateZipEntryStream(ZipArchive zipArchive, string filePath)
+        {
+            var entry = zipArchive.CreateEntry(filePath, CompressionLevel.NoCompression);
+            return entry.Open();
+        }
+
         var payloadManifest = await LoadManifest(datasetVersion, true, cancellationToken);
         var fetch = await LoadFetch(datasetVersion, cancellationToken);
 
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Create, false);
+        using var zipArchive = new ZipArchive(stream, ZipArchiveMode.Create, false);
+        var zipManifest = new BagItManifest();
 
-        foreach (var manifestFilePath in payloadManifest.Items.Select(i => i.FilePath))
+        foreach (var manifestItem in payloadManifest.Items)
         {
-            string filePath = manifestFilePath[5..]; // Strip "data/"
+            string zipFilePath = manifestItem.FilePath[5..]; // Strip "data/"
 
             if (paths.Length > 0 && 
-                !paths.Any(p => filePath.StartsWith(p, StringComparison.Ordinal)))
+                !paths.Any(p => zipFilePath.StartsWith(p, StringComparison.Ordinal)))
             {
                 continue;
             }
 
-            string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestFilePath);
+            string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestItem.FilePath);
             var data = await storageService.GetFileData(actualFilePath, cancellationToken);
 
             if (data != null)
             {
-                var entry = archive.CreateEntry(filePath, CompressionLevel.NoCompression);
-                using var entryStream = entry.Open();
-                using var dataStream = data.Stream;
-                await dataStream.CopyToAsync(entryStream, cancellationToken);
+                using var entryStream = CreateZipEntryStream(zipArchive, zipFilePath);
+                using (data.Stream)
+                {
+                    await data.Stream.CopyToAsync(entryStream, cancellationToken);
+                }
+
+                zipManifest.AddOrUpdateItem(new(zipFilePath, manifestItem.Checksum));
             }
+        }
+
+        if (zipManifest.Items.Any())
+        {
+            using var entryStream = CreateZipEntryStream(zipArchive, payloadManifestSha256FileName);
+            var content = zipManifest.Serialize();
+            entryStream.Write(content, 0, content.Length);
         }
     }
 
