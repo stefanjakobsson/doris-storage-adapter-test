@@ -11,10 +11,24 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.FileSystem;
 
+/// <summary>
+/// Storage service for storing files on a file system.
+/// 
+/// This storage service is only fully supported on Linux/Unix.
+/// On Windows it will return an error if StoreFile is called
+/// for a file that is currently being read.
+/// 
+/// The file system must be case sensitive, and the file path 
+/// for temporary files must be on the same partition as the 
+/// base path to ensure atomic file moves.
+/// </summary>
+/// <param name="configuration">FileSystemStorageService configuration.</param>
+/// <param name="lockService">ILockService (used when creating/deleting directories).</param>
 internal class FileSystemStorageService(
     IOptions<FileSystemStorageServiceConfiguration> configuration,
     ILockService lockService) : IStorageService
 {
+    // This is only need for supporting Windows; Linux supports all characters except '/'.
     private static readonly HashSet<char> invalidFileNameChars = [.. Path.GetInvalidFileNameChars()];
 
     private readonly ILockService lockService = lockService;
@@ -36,7 +50,22 @@ internal class FileSystemStorageService(
 
         try
         {
-            using (var stream = new FileStream(tempFile, FileMode.Create))
+            using (var stream = new FileStream(tempFile, new FileStreamOptions
+            {
+                Access = FileAccess.Write,
+                Mode = FileMode.Create,
+
+                // FileOptions.Asynchronous only has real effect on Windows.
+                // It is ignored on Linux where file I/O is always executed
+                // synchronously on a background thread (as of 2024-09-11).
+                Options = FileOptions.Asynchronous, 
+
+                PreallocationSize = data.Length,
+
+                // The value of Share does not really matter since we are writing to a
+                // temporary file that will not be accessed by anyone else.
+                Share = FileShare.Read
+            }))
             {
                 await data.Stream.CopyToAsync(stream, cancellationToken);
             }
@@ -53,7 +82,7 @@ internal class FileSystemStorageService(
         }
         catch
         {
-            // Cancelled or failed, try to clean up
+            // Cancelled or failed, try to clean up.
             try
             {
                 File.Delete(tempFile);
@@ -66,7 +95,7 @@ internal class FileSystemStorageService(
 
         try
         {
-            // Update creation time if necessary
+            // Update creation time if necessary.
             fileInfo.Refresh();
             if (dateCreated != null)
             {
@@ -76,7 +105,7 @@ internal class FileSystemStorageService(
         catch
         {
             // Ignore errors here since file has been successfully stored
-            // and updating creation time is not crucial
+            // and updating creation time is not crucial.
         }
 
         return new(
@@ -102,13 +131,13 @@ internal class FileSystemStorageService(
 
         try
         {
-            // Delete any empty subdirectories that result from deleting the file
+            // Delete any empty subdirectories that result from deleting the file.
             await DeleteEmptyDirectories(Path.GetDirectoryName(filePath)!, CancellationToken.None);
         }
         catch
         {
             // Ignore errors here since file has been successfully deleted
-            // and deleting empty directories is not crucial
+            // and deleting empty directories is not crucial.
         }
     }
 
@@ -119,7 +148,7 @@ internal class FileSystemStorageService(
         filePath = GetFullPathOrThrow(filePath);
 
         // Explicitly check for existence, since that is much faster
-        // than letting FileStream constructor throw FileNotFoundException
+        // than letting the FileStream constructor throw FileNotFoundException.
         if (!File.Exists(filePath))
         {
             return Task.FromResult<FileData?>(null);
@@ -128,7 +157,29 @@ internal class FileSystemStorageService(
         Stream stream;
         try
         {
-            stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+            stream = new FileStream(filePath, new FileStreamOptions
+            {
+                Access = FileAccess.Read,
+                Mode = FileMode.Open,
+
+                // FileOptions.Asynchronous only has real effect on Windows.
+                // It is ignored on Linux where file I/O is always executed
+                // synchronously on a background thread (as of 2024-09-11).
+                Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
+
+                // On Linux we really only have to specify something other than FileShare.None to
+                // ensure that simultaneous calls to GetFileData for the same file succeeds.
+                // FileShare.None would result in an (advisory) exclusive file lock which would prevent
+                // multiple readers (unless DOTNET_SYSTEM_IO_DISABLEFILELOCKING is true).
+                // Simultaneous calls to StoreFile or DeleteFile will succeed regardless of the value of
+                // Share here, since File.Move() and File.Delete() does not check for file locks under Linux.
+
+                // On Windows the specified FileShare.Delete ensures that a simultaneous call to DeleteFile
+                // will succeed. It is not possible on Windows to allow overwriting the file
+                // with File.Move() when it is open for reading here, which means that StoreFile will fail
+                // if the file is being read simultaneously.
+                Share = FileShare.Read | FileShare.Write | FileShare.Delete
+            });
         }
         catch (FileNotFoundException)
         {
@@ -176,6 +227,7 @@ internal class FileSystemStorageService(
 
         if (!directory.Exists)
         {
+            // Given path is not a directory, try with nearest parent directory.
             directory = new(path[..path.LastIndexOf(Path.DirectorySeparatorChar)]);
 
             if (!directory.Exists)
@@ -206,6 +258,7 @@ internal class FileSystemStorageService(
 
         if (path.Split('/').Any(c => c.Any(invalidFileNameChars.Contains)))
         {
+            // This can only happen on Windows; Linux supports all characters except '/'.
             Throw();
         }
 
@@ -229,6 +282,12 @@ internal class FileSystemStorageService(
         return path;
     }
 
+    /// <summary>
+    /// Returns the root directory of the given directory path
+    /// to be used as lock path when creating/deleting directories.
+    /// </summary>
+    /// <param name="directoryPath">The directory path to get lock path for.</param>
+    /// <returns>The lock path (the root directory).</returns>
     private string GetLockPath(string directoryPath)
     {
         string relativePath = NormalizePath(Path.GetRelativePath(basePath, directoryPath));
