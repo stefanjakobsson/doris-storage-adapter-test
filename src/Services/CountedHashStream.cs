@@ -11,10 +11,10 @@ namespace DorisStorageAdapter.Services;
 /// and the SHA256 hash, of the bytes read from the underlying stream.
 /// </summary>
 /// <param name="underlyingStream">The underlying stream to wrap.</param>
-internal class CountedHashStream(Stream underlyingStream) : Stream
+internal sealed class CountedHashStream(Stream underlyingStream) : Stream
 {
     private readonly Stream underlyingStream = underlyingStream;
-    private long bytesRead = 0;
+    private long bytesRead;
     private readonly IncrementalHash sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
     public long BytesRead => bytesRead;
@@ -44,18 +44,24 @@ internal class CountedHashStream(Stream underlyingStream) : Stream
         get => underlyingStream.WriteTimeout;
         set => underlyingStream.WriteTimeout = value;
     }
-    public override void Close() => underlyingStream.Close();
+    public override void Close()
+    {
+        underlyingStream.Close();
+        base.Close();
+    }
 
     protected override void Dispose(bool disposing)
     {
         sha256.Dispose();
+        underlyingStream.Dispose();
         base.Dispose(disposing);
     }
 
-    public override ValueTask DisposeAsync()
+    public async override ValueTask DisposeAsync()
     {
         sha256.Dispose();
-        return underlyingStream.DisposeAsync();
+        await underlyingStream.DisposeAsync();
+        await base.DisposeAsync();
     }
 
     public override void Flush() => underlyingStream.Flush();

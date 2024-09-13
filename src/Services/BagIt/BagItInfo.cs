@@ -6,12 +6,13 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using DorisStorageAdapter.Models;
 
-namespace DorisStorageAdapter.Models.BagIt;
+namespace DorisStorageAdapter.Services.BagIt;
 
-public class BagItInfo
+internal sealed class BagItInfo
 {
-    private readonly SortedDictionary<string, List<BagItInfoItem>> items = new(StringComparer.InvariantCulture);
+    private readonly SortedDictionary<string, List<BagItInfoItem>> items = new(StringComparer.Ordinal);
 
     private const string baggingDateLabel = "Bagging-Date";
     private const string bagSizeLabel = "Bag-Size";
@@ -40,7 +41,7 @@ public class BagItInfo
                     DateTimeStyles.None,
                     out var dateTime) ? dateTime : (DateTime?)null);
 
-        set => SetOrRemoveItem(baggingDateLabel, value?.ToString("yyyy-MM-dd"));
+        set => SetOrRemoveItem(baggingDateLabel, value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
     }
 
     public string? BagSize
@@ -77,39 +78,40 @@ public class BagItInfo
         });
 
         set => SetOrRemoveItem(payloadOxumLabel, value == null ? null :
-            value.OctetCount.ToString() + '.' + value.StreamCount.ToString());
+            value.OctetCount.ToString(CultureInfo.InvariantCulture) + '.' +
+            value.StreamCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public AccessRightEnum? AccessRight
+    public AccessRight? AccessRight
     {
         get => GetValue(accessRightLabel, v => v switch
         {
-            publicAccessRightValue => AccessRightEnum.@public,
-            nonPublicAccessRightValue => AccessRightEnum.non_public,
-            _ => (AccessRightEnum?)null
+            publicAccessRightValue => Models.AccessRight.@public,
+            nonPublicAccessRightValue => Models.AccessRight.nonPublic,
+            _ => (AccessRight?)null
         });
 
         set => SetOrRemoveItem(accessRightLabel, value switch
         {
-            AccessRightEnum.@public => publicAccessRightValue,
-            AccessRightEnum.non_public => nonPublicAccessRightValue,
+            Models.AccessRight.@public => publicAccessRightValue,
+            Models.AccessRight.nonPublic => nonPublicAccessRightValue,
             _ => null
         });
     }
 
-    public DatasetStatusEnum? DatasetStatus
+    public DatasetStatus? DatasetStatus
     {
         get => GetValue(datasetStatusLabel, v => v switch
         {
-            completedDatasetStatusValue => DatasetStatusEnum.completed,
-            withdrawnDatasetStatusValue => DatasetStatusEnum.withdrawn,
-            _ => (DatasetStatusEnum?)null
+            completedDatasetStatusValue => Models.DatasetStatus.completed,
+            withdrawnDatasetStatusValue => Models.DatasetStatus.withdrawn,
+            _ => (DatasetStatus?)null
         });
 
         set => SetOrRemoveItem(datasetStatusLabel, value switch
         {
-            DatasetStatusEnum.completed => completedDatasetStatusValue,
-            DatasetStatusEnum.withdrawn => withdrawnDatasetStatusValue,
+            Models.DatasetStatus.completed => completedDatasetStatusValue,
+            Models.DatasetStatus.withdrawn => withdrawnDatasetStatusValue,
             _ => null
         });
     }
@@ -179,7 +181,7 @@ public class BagItInfo
             {
                 AddItemIfNotEmpty();
 
-                int index = line.IndexOf(": ");
+                int index = line.IndexOf(": ", StringComparison.Ordinal);
                 label = line[..index];
                 value = line[(index + 2)..];
             }
@@ -199,5 +201,5 @@ public class BagItInfo
         return Encoding.UTF8.GetBytes(string.Join("\n", values));
     }
 
-    public record PayloadOxumType(long OctetCount, long StreamCount);
+    public sealed record PayloadOxumType(long OctetCount, long StreamCount);
 }

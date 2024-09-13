@@ -1,6 +1,7 @@
 ﻿using ByteSizeLib;
+using DorisStorageAdapter.Configuration;
 using DorisStorageAdapter.Models;
-using DorisStorageAdapter.Models.BagIt;
+using DorisStorageAdapter.Services.BagIt;
 using DorisStorageAdapter.Services.Exceptions;
 using DorisStorageAdapter.Services.Lock;
 using DorisStorageAdapter.Services.Storage;
@@ -106,7 +107,7 @@ public class ServiceImplementation(
 
     public async Task PublishDatasetVersion(
         DatasetVersionIdentifier datasetVersion, 
-        AccessRightEnum accessRight, 
+        AccessRight accessRight, 
         string doi,
         CancellationToken cancellationToken)
     {
@@ -124,7 +125,7 @@ public class ServiceImplementation(
 
     private async Task PublishDatasetVersionImpl(
         DatasetVersionIdentifier datasetVersion, 
-        AccessRightEnum accessRight, 
+        AccessRight accessRight, 
         string doi,
         CancellationToken cancellationToken)
     {
@@ -181,7 +182,7 @@ public class ServiceImplementation(
             BagSize = ByteSize.FromBytes(octetCount).ToBinaryString(CultureInfo.InvariantCulture),
             PayloadOxum = new(octetCount, payloadManifest?.Manifest?.Items?.LongCount() ?? 0),
             AccessRight = accessRight,
-            DatasetStatus = DatasetStatusEnum.completed
+            DatasetStatus = DatasetStatus.completed
         };
         byte[] bagInfoContents = bagInfo.Serialize();
 
@@ -241,7 +242,7 @@ public class ServiceImplementation(
             return;
         }
 
-        bagInfo.DatasetStatus = DatasetStatusEnum.withdrawn;
+        bagInfo.DatasetStatus = DatasetStatus.withdrawn;
 
         var bagInfoContents = bagInfo.Serialize();
 
@@ -254,7 +255,7 @@ public class ServiceImplementation(
 
     public async Task<Models.File> StoreFile(
         DatasetVersionIdentifier datasetVersion,
-        FileTypeEnum type,
+        FileType type,
         string filePath,
         FileData data,
         CancellationToken cancellationToken)
@@ -369,7 +370,7 @@ public class ServiceImplementation(
 
     public async Task DeleteFile(
         DatasetVersionIdentifier datasetVersion,
-        FileTypeEnum type,
+        FileType type,
         string filePath,
         CancellationToken cancellationToken)
     {
@@ -412,7 +413,7 @@ public class ServiceImplementation(
 
     public async Task<FileData?> GetFileData(
         DatasetVersionIdentifier datasetVersion,
-        FileTypeEnum type,
+        FileType type,
         string filePath,
         bool restrictToPubliclyAccessible,
         CancellationToken cancellationToken)
@@ -437,8 +438,8 @@ public class ServiceImplementation(
                 return null;
             }
 
-            if (bagInfo.DatasetStatus != DatasetStatusEnum.completed ||
-                type == FileTypeEnum.data && bagInfo.AccessRight != AccessRightEnum.@public)
+            if (bagInfo.DatasetStatus != DatasetStatus.completed ||
+                type == FileType.data && bagInfo.AccessRight != AccessRight.@public)
             {
                 return null;
             }
@@ -475,11 +476,11 @@ public class ServiceImplementation(
         var result = new List<StorageServiceFile>();
 
         string previousPayloadPath = "";
-        Dictionary<string, StorageServiceFile> dict = [];
+        Dictionary<string, StorageServiceFile> dict = new(StringComparer.Ordinal);
         foreach (var item in fetch.Items.OrderBy(i => i.Url, StringComparer.Ordinal))
         {
             string path = datasetPath + DecodeUrlEncodedPath(item.Url[3..]);
-            string payloadPath = path[..(path.IndexOf("/data/") + 6)];
+            string payloadPath = path[..(path.IndexOf("/data/", StringComparison.Ordinal) + 6)];
 
             if (payloadPath != previousPayloadPath)
             {
@@ -557,7 +558,7 @@ public class ServiceImplementation(
         }
     }
 
-    private static string GetFilePathOrThrow(FileTypeEnum type, string filePath)
+    private static string GetFilePathOrThrow(FileType type, string filePath)
     {
         foreach (string pathComponent in filePath.Split('/'))
         {
@@ -607,17 +608,17 @@ public class ServiceImplementation(
 
     private Models.File ToModelFile(DatasetVersionIdentifier datasetVersion, StorageServiceFile file, byte[]? sha256)
     {
-        FileTypeEnum type = default;
+        FileType type = default;
         string name = "";
 
         if (file.Path.StartsWith("data/data/", StringComparison.Ordinal))
         {
-            type = FileTypeEnum.data;
+            type = FileType.data;
             name = file.Path["data/data/".Length..];
         }
         else if (file.Path.StartsWith("data/documentation/", StringComparison.Ordinal))
         {
-            type = FileTypeEnum.documentation;
+            type = FileType.documentation;
             name = file.Path["data/documentation/".Length..];
         }
 
@@ -833,11 +834,11 @@ public class ServiceImplementation(
     private static bool TryGetPreviousVersionNumber(string versionNumber, out string previousVersionNumber)
     {
         var values = versionNumber.Split('.');
-        int versionMajor = int.Parse(values[0]);
+        int versionMajor = int.Parse(values[0], CultureInfo.InvariantCulture);
 
         if (versionMajor > 1)
         {
-            previousVersionNumber = (versionMajor - 1).ToString();
+            previousVersionNumber = (versionMajor - 1).ToString(CultureInfo.InvariantCulture);
             return true;
         }
 

@@ -1,5 +1,5 @@
 ﻿namespace DorisStorageAdapter.Services.Storage.InMemory;
 
-internal record InMemoryFile(
+internal sealed record InMemoryFile(
     StorageServiceFile Metadata,
     byte[] Data);

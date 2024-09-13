@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace DorisStorageAdapter.Authorization;
+namespace DorisStorageAdapter.Configuration;
 
-internal record AuthorizationConfiguration
+internal sealed record AuthorizationConfiguration
 {
     public const string ConfigurationSection = "Authorization";
 

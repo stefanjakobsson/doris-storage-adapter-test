@@ -1,6 +1,6 @@
 ﻿namespace DorisStorageAdapter.Services.Exceptions;
 
-internal class DatasetStatusException : ApiException
+internal sealed class DatasetStatusException : ApiException
 {
     public DatasetStatusException() : base("Status mismatch.") { }
 }

@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DorisStorageAdapter.Models.BagIt;
+namespace DorisStorageAdapter.Services.BagIt;
 
-public class BagItFetch
+internal sealed class BagItFetch
 {
-    private readonly SortedDictionary<string, BagItFetchItem> items = new(StringComparer.InvariantCulture);
+    private readonly SortedDictionary<string, BagItFetchItem> items = new(StringComparer.Ordinal);
 
     public static async Task<BagItFetch> Parse(Stream stream, CancellationToken cancellationToken)
     {
@@ -20,10 +21,10 @@ public class BagItFetch
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
         {
-            int index1 = line.IndexOf(' ');
+            int index1 = line.IndexOf(' ', StringComparison.Ordinal);
             string url = line[..index1];
             string remaining = line[(index1 + 1)..];
-            int index2 = remaining.IndexOf(' ');
+            int index2 = remaining.IndexOf(' ', StringComparison.Ordinal);
             long? length = long.TryParse(remaining[..index2], out long value) ? value : null;
             string filePath = BagitHelpers.DecodeFilePath(remaining[(index2 + 1)..]);
 
@@ -64,9 +65,9 @@ public class BagItFetch
 
     public byte[] Serialize()
     {
-        var values = Items.Select(i => 
-            i.Url + ' ' + 
-            (i.Length?.ToString() ?? "-") + ' ' +
+        var values = Items.Select(i =>
+            i.Url + ' ' +
+            (i.Length?.ToString(CultureInfo.InvariantCulture) ?? "-") + ' ' +
             BagitHelpers.EncodeFilePath(i.FilePath));
 
         return Encoding.UTF8.GetBytes(string.Join("\n", values));

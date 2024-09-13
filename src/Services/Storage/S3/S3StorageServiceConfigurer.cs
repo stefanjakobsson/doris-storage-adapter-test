@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DorisStorageAdapter.Services.Storage.S3;
 
-internal class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageService>
+internal sealed class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3StorageService>
 {
     public void Configure(IServiceCollection services, IConfiguration configuration)
     {

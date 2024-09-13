@@ -6,9 +6,9 @@ using System.Linq;
 
 namespace DorisStorageAdapter.Services.Storage.InMemory;
 
-internal class InMemoryStorage
+internal sealed class InMemoryStorage
 {
-    private readonly ConcurrentDictionary<string, InMemoryFile> files = [];
+    private readonly ConcurrentDictionary<string, InMemoryFile> files = new(StringComparer.Ordinal);
 
     public InMemoryFile AddOrUpdate(string filePath, byte[] data, string? contentType) =>
         files.AddOrUpdate(filePath,

@@ -17,11 +17,11 @@ namespace DorisStorageAdapter.Services.Storage.S3;
 /// </summary>
 /// <param name="underlyingStream">The underlying stream to wrap.</param>
 /// <param name="length">The underlying stream's length.</param>
-internal class StreamWrapper(Stream underlyingStream, long length) : Stream
+internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stream
 {
     private readonly Stream underlyingStream = underlyingStream;
     private readonly long length = length;
-    private long position = 0;
+    private long position;
 
     public override bool CanRead => true;
     public override bool CanSeek => true;
@@ -41,11 +41,23 @@ internal class StreamWrapper(Stream underlyingStream, long length) : Stream
         set => underlyingStream.ReadTimeout = value;
     }
 
-    public override void Close() => underlyingStream.Close();
+    public override void Close()
+    {
+        underlyingStream.Close();
+        base.Close();
+    }
 
-    protected override void Dispose(bool disposing) => base.Dispose(disposing);
+    protected override void Dispose(bool disposing)
+    {
+        underlyingStream.Dispose();
+        base.Dispose(disposing);
+    }
 
-    public override ValueTask DisposeAsync() => underlyingStream.DisposeAsync();
+    public async override ValueTask DisposeAsync()
+    {
+        await underlyingStream.DisposeAsync();
+        await base.DisposeAsync();
+    }
  
     public override void Flush() => underlyingStream.Flush();
 

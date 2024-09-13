@@ -6,11 +6,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DorisStorageAdapter.Models.BagIt;
+namespace DorisStorageAdapter.Services.BagIt;
 
-public class BagItManifest
+internal sealed class BagItManifest
 {
-    private readonly SortedDictionary<string, BagItManifestItem> items = new(StringComparer.InvariantCulture);
+    private readonly SortedDictionary<string, BagItManifestItem> items = new(StringComparer.Ordinal);
     private readonly Dictionary<byte[], List<BagItManifestItem>> checksumToItems = new(ByteArrayComparer.Default);
 
     public static async Task<BagItManifest> Parse(Stream stream, CancellationToken cancellationToken)
@@ -21,7 +21,7 @@ public class BagItManifest
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
         {
-            int index = line.IndexOf(' ');
+            int index = line.IndexOf(' ', StringComparison.Ordinal);
             string checksum = line[..index];
             string filePath = BagitHelpers.DecodeFilePath(line[(index + 1)..]);
 
@@ -100,8 +100,8 @@ public class BagItManifest
 
     public byte[] Serialize()
     {
-        var values = Items.Select(i => 
-            Convert.ToHexString(i.Checksum) + " " + 
+        var values = Items.Select(i =>
+            Convert.ToHexString(i.Checksum) + " " +
             BagitHelpers.EncodeFilePath(i.FilePath));
 
         return Encoding.UTF8.GetBytes(string.Join("\n", values));

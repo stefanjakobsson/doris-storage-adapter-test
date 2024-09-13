@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DorisStorageAdapter.Services.Storage.FileSystem;
 
-internal class FileSystemStorageServiceConfigurer : IStorageServiceConfigurer<FileSystemStorageService>
+internal sealed class FileSystemStorageServiceConfigurer : IStorageServiceConfigurer<FileSystemStorageService>
 {
     public void Configure(IServiceCollection services, IConfiguration configuration)
     {

@@ -1,14 +1,14 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 
-namespace DorisStorageAdapter.Models.BagIt;
+namespace DorisStorageAdapter.Services.BagIt;
 
 /// <summary>
 ///    An IEqualityComparer that compares two byte arrays to see if they
 ///    are equal to each other based on the value sequences contained within
 ///    the arrays.
 /// </summary>
-internal class ByteArrayComparer : IEqualityComparer<byte[]>
+internal sealed class ByteArrayComparer : IEqualityComparer<byte[]>
 {
     //    Private backing field for the Default property below.
     private static readonly ByteArrayComparer _default = new();

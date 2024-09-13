@@ -1,7 +1,7 @@
 ﻿namespace DorisStorageAdapter.Models;
 
-public enum AccessRightEnum
+public enum AccessRight
 {
     @public,
-    non_public
+    nonPublic
 };

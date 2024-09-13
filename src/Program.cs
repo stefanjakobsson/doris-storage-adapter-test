@@ -1,5 +1,4 @@
-using DorisStorageAdapter;
-using DorisStorageAdapter.Authorization;
+using DorisStorageAdapter.Configuration;
 using DorisStorageAdapter.Controllers;
 using DorisStorageAdapter.Controllers.Attributes;
 using DorisStorageAdapter.Services;
@@ -171,7 +170,7 @@ void SetupStorageService()
     var configSection = builder.Configuration.GetSection("Storage");
     const string configKey = "ActiveStorageService";
     string storageService = configSection.GetValue<string>(configKey) ??
-        throw new ApplicationException($"{configKey} not set.");
+        throw new StorageServiceConfigurationException($"{configKey} not set.");
 
     var types = typeof(Program).Assembly.GetTypes()
         .Where(t =>
@@ -183,11 +182,11 @@ void SetupStorageService()
 
     if (types.Count == 0)
     {
-        throw new ApplicationException($"{storageService} not found.");
+        throw new StorageServiceConfigurationException($"{storageService} not found.");
     }
     else if (types.Count > 1)
     {
-        throw new ApplicationException($"Multiple implementations of {storageService} found.");
+        throw new StorageServiceConfigurationException($"Multiple implementations of {storageService} found.");
     }
 
     var configurer = Activator.CreateInstance(types[0]) as IStorageServiceConfigurerBase;

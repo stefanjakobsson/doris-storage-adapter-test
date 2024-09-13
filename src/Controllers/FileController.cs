@@ -1,5 +1,5 @@
-using DorisStorageAdapter.Authorization;
 using DorisStorageAdapter.Controllers.Attributes;
+using DorisStorageAdapter.Controllers.Authorization;
 using DorisStorageAdapter.Models;
 using DorisStorageAdapter.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -45,7 +45,7 @@ public class FileController(
     public async Task<Results<Ok<File>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
         string datasetIdentifier,
         string versionNumber,
-        FileTypeEnum type,
+        FileType type,
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
@@ -82,7 +82,7 @@ public class FileController(
     public async Task<Results<Ok, ForbidHttpResult>> DeleteFile(
         string datasetIdentifier,
         string versionNumber,
-        FileTypeEnum type,
+        FileType type,
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
@@ -108,7 +108,7 @@ public class FileController(
     public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetFileData(
         string datasetIdentifier,
         string versionNumber,
-        FileTypeEnum type,
+        FileType type,
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace DorisStorageAdapter;
+namespace DorisStorageAdapter.Configuration;
 
 public record GeneralConfiguration
 {

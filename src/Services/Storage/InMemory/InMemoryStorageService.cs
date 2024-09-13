@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.InMemory;
 
-internal class InMemoryStorageService(InMemoryStorage storage) : IStorageService
+internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorageService
 {
     private readonly InMemoryStorage storage = storage;
 

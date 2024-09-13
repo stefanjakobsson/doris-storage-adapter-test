@@ -8,7 +8,7 @@ using System;
 namespace DorisStorageAdapter.Controllers.Attributes;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-internal class DevOnlyAttribute : Attribute, IFilterFactory
+internal sealed class DevOnlyAttribute : Attribute, IFilterFactory
 {
     public IFilterMetadata CreateInstance(IServiceProvider serviceProvider)
     {
@@ -18,7 +18,7 @@ internal class DevOnlyAttribute : Attribute, IFilterFactory
     public bool IsReusable => true;
 
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-    private class DevOnlyAttributeImpl(IWebHostEnvironment hostingEnv) : Attribute, IAuthorizationFilter
+    private sealed class DevOnlyAttributeImpl(IWebHostEnvironment hostingEnv) : Attribute, IAuthorizationFilter
     {
         private IWebHostEnvironment HostingEnv { get; } = hostingEnv;
 

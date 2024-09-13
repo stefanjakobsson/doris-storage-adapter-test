@@ -1,5 +1,6 @@
-﻿using DorisStorageAdapter.Authorization;
+﻿using DorisStorageAdapter.Configuration;
 using DorisStorageAdapter.Controllers.Attributes;
+using DorisStorageAdapter.Controllers.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;

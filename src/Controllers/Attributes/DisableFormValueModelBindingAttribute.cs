@@ -5,7 +5,7 @@ using System;
 namespace DorisStorageAdapter.Controllers.Attributes;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-internal class DisableFormValueModelBindingAttribute : Attribute, IResourceFilter
+internal sealed class DisableFormValueModelBindingAttribute : Attribute, IResourceFilter
 {
     public void OnResourceExecuting(ResourceExecutingContext context)
     {

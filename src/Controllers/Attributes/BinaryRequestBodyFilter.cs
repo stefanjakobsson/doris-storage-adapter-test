@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace DorisStorageAdapter.Controllers.Attributes;
 
-internal class BinaryRequestBodyFilter : IOperationFilter
+internal sealed class BinaryRequestBodyFilter : IOperationFilter
 {
     /// <summary>
     /// Configures operations decorated with the <see cref="BinaryRequestBodyAttribute" />.

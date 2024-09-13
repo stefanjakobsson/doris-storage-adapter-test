@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Lock;
 
-internal class InProcessLockService : ILockService
+internal sealed class InProcessLockService : ILockService, IDisposable
 {
     private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionSharedLocks = new(new AsyncKeyedLockOptions(maxCount: int.MaxValue));
     private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionExclusiveLocks = new();
@@ -63,5 +63,12 @@ internal class InProcessLockService : ILockService
             await task();
             return true;
         }
+    }
+
+    public void Dispose()
+    {
+        datasetVersionExclusiveLocks.Dispose();
+        datasetVersionSharedLocks.Dispose();
+        pathLocks.Dispose();
     }
 }

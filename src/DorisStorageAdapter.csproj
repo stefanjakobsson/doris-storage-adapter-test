@@ -2,8 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <AnalysisMode>Recommended</AnalysisMode>
     <Nullable>enable</Nullable>
-    <WarningsAsErrors>Nullable</WarningsAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors);Nullable;CA1307;CA1309;CA1310</WarningsAsErrors>
     <NoWarn>VSTHRD200</NoWarn>
   </PropertyGroup>
 

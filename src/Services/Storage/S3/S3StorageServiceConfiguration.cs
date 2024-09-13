@@ -2,7 +2,7 @@
 
 namespace DorisStorageAdapter.Services.Storage.S3;
 
-internal record S3StorageServiceConfiguration
+internal sealed record S3StorageServiceConfiguration
 {
     [Required]
     [Url]

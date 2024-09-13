@@ -1,4 +1,4 @@
-﻿namespace DorisStorageAdapter.Authorization;
+﻿namespace DorisStorageAdapter.Controllers.Authorization;
 
 internal static class Claims
 {

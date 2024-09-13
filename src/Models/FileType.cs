@@ -1,6 +1,6 @@
 ﻿namespace DorisStorageAdapter.Models;
 
-public enum FileTypeEnum
+public enum FileType
 {
     data,
     documentation

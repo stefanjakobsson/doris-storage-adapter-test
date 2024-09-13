@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage.S3;
 
-internal class S3StorageService(
+internal sealed class S3StorageService(
     IAmazonS3 client,
     IOptions<S3StorageServiceConfiguration> configuration) : IStorageService
 {

@@ -1,4 +1,4 @@
-﻿using DorisStorageAdapter.Authorization;
+﻿using DorisStorageAdapter.Controllers.Authorization;
 using DorisStorageAdapter.Models;
 using DorisStorageAdapter.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -45,13 +45,13 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
     public async Task<OkResult> PublishDatasetVersion(
         string datasetIdentifier,
         string versionNumber,
-        [FromForm] AccessRightEnum access_right,
+        [FromForm(Name = "access_right")] AccessRight accessRight,
         [FromForm] string doi,
         CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await appService.PublishDatasetVersion(datasetVersion, access_right, doi, cancellationToken);
+        await appService.PublishDatasetVersion(datasetVersion, accessRight, doi, cancellationToken);
 
         return Ok();
     }

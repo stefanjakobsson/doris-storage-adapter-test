@@ -24,7 +24,7 @@ namespace DorisStorageAdapter.Services.Storage.FileSystem;
 /// </summary>
 /// <param name="configuration">FileSystemStorageService configuration.</param>
 /// <param name="lockService">ILockService (used when creating/deleting directories).</param>
-internal class FileSystemStorageService(
+internal sealed class FileSystemStorageService(
     IOptions<FileSystemStorageServiceConfiguration> configuration,
     ILockService lockService) : IStorageService
 {
@@ -292,7 +292,7 @@ internal class FileSystemStorageService(
     {
         string relativePath = NormalizePath(Path.GetRelativePath(basePath, directoryPath));
 
-        int index = relativePath.IndexOf('/') + 1;
+        int index = relativePath.IndexOf('/', StringComparison.Ordinal) + 1;
         if (index > 0)
         {
             return relativePath[..index];

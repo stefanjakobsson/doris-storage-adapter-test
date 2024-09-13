@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DorisStorageAdapter.Services.Storage.InMemory;
 
-internal class InMemoryStorageServiceConfigurer : IStorageServiceConfigurer<InMemoryStorageService>
+internal sealed class InMemoryStorageServiceConfigurer : IStorageServiceConfigurer<InMemoryStorageService>
 {
     public void Configure(IServiceCollection services, IConfiguration configuration)
     {
