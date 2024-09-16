@@ -147,14 +147,14 @@ internal sealed class BagItInfo
     {
         var result = new BagItInfo();
 
-        var reader = new StreamReader(stream, Encoding.UTF8);
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
         string? line;
         string value = "";
         string label = "";
 
         void AddItemIfNotEmpty()
         {
-            if (value == "")
+            if (string.IsNullOrEmpty(value))
             {
                 return;
             }

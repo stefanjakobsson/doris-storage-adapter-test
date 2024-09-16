@@ -60,8 +60,8 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
     public async override ValueTask DisposeAsync()
     {
         sha256.Dispose();
-        await underlyingStream.DisposeAsync();
-        await base.DisposeAsync();
+        await underlyingStream.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeAsync().ConfigureAwait(false);
     }
 
     public override void Flush() => underlyingStream.Flush();
@@ -100,10 +100,10 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-#pragma warning disable IDE0079
-#pragma warning disable CA1835
+#pragma warning disable IDE0079 // Remove unnecessary suppression
+#pragma warning disable CA1835 //  Prefer the memory-based overloads of ReadAsync/WriteAsync methods in stream-based classes
         var bytesRead = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-#pragma warning disable CA1835
+#pragma warning restore CA1835
 #pragma warning restore IDE0079
 
         this.bytesRead += bytesRead;

@@ -21,7 +21,7 @@ internal sealed class S3StorageService(
         FileData data,
         CancellationToken cancellationToken)
     {
-        var utility = new TransferUtility(client, new()
+        using var utility = new TransferUtility(client, new()
         {
             MinSizeBeforePartUpload = configuration.MultiPartUploadThreshold
         });

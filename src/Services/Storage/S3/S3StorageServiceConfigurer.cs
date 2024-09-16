@@ -21,7 +21,7 @@ internal sealed class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3S
         var s3Config = configuration.Get<S3StorageServiceConfiguration>()!;
 
         services.AddSingleton<IAmazonS3>(
-            new AmazonS3Client(s3Config.AccessKey, s3Config.SecretKey, new AmazonS3Config
+            sp => new AmazonS3Client(s3Config.AccessKey, s3Config.SecretKey, new AmazonS3Config
             {
                 // We disable retries since we do not support a real
                 // seekable stream (to avoid buffering in memory),

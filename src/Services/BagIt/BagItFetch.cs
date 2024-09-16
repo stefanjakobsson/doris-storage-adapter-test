@@ -17,7 +17,7 @@ internal sealed class BagItFetch
     {
         var result = new BagItFetch();
 
-        var reader = new StreamReader(stream, Encoding.UTF8);
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
         {

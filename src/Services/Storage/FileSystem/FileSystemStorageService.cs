@@ -83,12 +83,22 @@ internal sealed class FileSystemStorageService(
         catch
         {
             // Cancelled or failed, try to clean up.
+
             try
             {
                 File.Delete(tempFile);
+            }
+#pragma warning disable CA1031 // Do not catch general exception types
+            catch { }
+#pragma warning restore CA1031
+
+            try
+            {
                 await DeleteEmptyDirectories(directoryPath, CancellationToken.None);
             }
+#pragma warning disable CA1031 // Do not catch general exception types
             catch { }
+#pragma warning restore CA1031
 
             throw;
         }
@@ -102,11 +112,14 @@ internal sealed class FileSystemStorageService(
                 fileInfo.CreationTimeUtc = dateCreated.Value;
             }
         }
+#pragma warning disable CA1031 // Do not catch general exception types
         catch
         {
             // Ignore errors here since file has been successfully stored
             // and updating creation time is not crucial.
         }
+#pragma warning restore CA1031
+
 
         return new(
             ContentType: null,
@@ -129,16 +142,19 @@ internal sealed class FileSystemStorageService(
             return;
         }
 
+
         try
         {
             // Delete any empty subdirectories that result from deleting the file.
             await DeleteEmptyDirectories(Path.GetDirectoryName(filePath)!, CancellationToken.None);
         }
+#pragma warning disable CA1031 // Do not catch general exception types
         catch
         {
             // Ignore errors here since file has been successfully deleted
             // and deleting empty directories is not crucial.
         }
+#pragma warning restore CA1031
     }
 
     public Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
@@ -154,10 +170,9 @@ internal sealed class FileSystemStorageService(
             return Task.FromResult<FileData?>(null);
         }
         
-        Stream stream;
         try
         {
-            stream = new FileStream(filePath, new FileStreamOptions
+            var stream = new FileStream(filePath, new FileStreamOptions
             {
                 Access = FileAccess.Read,
                 Mode = FileMode.Open,
@@ -180,19 +195,19 @@ internal sealed class FileSystemStorageService(
                 // if the file is being read simultaneously.
                 Share = FileShare.Read | FileShare.Write | FileShare.Delete
             });
+
+            return Task.FromResult<FileData?>(new(
+                Stream: stream,
+                Length: stream.Length,
+                ContentType: null));
         }
         catch (FileNotFoundException)
         {
             return Task.FromResult<FileData?>(null);
         }
-
-        return Task.FromResult<FileData?>(new(
-            Stream: stream,
-            Length: stream.Length,
-            ContentType: null));
     }
 
-#pragma warning disable 1998
+#pragma warning disable CS1998 // This async method lacks 'await'
     public async IAsyncEnumerable<StorageServiceFile> ListFiles(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -201,7 +216,7 @@ internal sealed class FileSystemStorageService(
         {
             foreach (var entry in directory.EnumerateFileSystemInfos())
             {
-                if (path != "" && !entry.FullName.StartsWith(path, StringComparison.Ordinal))
+                if (!string.IsNullOrEmpty(path) && !entry.FullName.StartsWith(path, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -250,11 +265,11 @@ internal sealed class FileSystemStorageService(
               Length: file.Length);
         }
     }
-#pragma warning restore 1998
+#pragma warning restore CS1998
 
     private string GetFullPathOrThrow(string path)
     {
-        void Throw() => throw new IllegalPathException(path);
+        static void Throw() => throw new IllegalPathException();
 
         if (path.Split('/').Any(c => c.Any(invalidFileNameChars.Contains)))
         {

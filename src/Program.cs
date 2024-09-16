@@ -122,7 +122,7 @@ builder.Services
         options.SetJwksOptions(
             new(
                 jwksUri: authorizationConfiguration.JwksUri,
-                audience: generalConfiguration.PublicUrl
+                audience: generalConfiguration.PublicUrl.ToString()
             ));
     
         // Limiting the valid algorithms to only the one used by Doris hardens security by

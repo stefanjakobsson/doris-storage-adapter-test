@@ -45,7 +45,7 @@ internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorage
         return Task.FromResult<FileData?>(null);
     }
 
-#pragma warning disable 1998
+#pragma warning disable CS1998 // This async method lacks 'await'
     public async IAsyncEnumerable<StorageServiceFile> ListFiles(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -57,5 +57,5 @@ internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorage
             yield return f.Metadata;
         }
     }
-#pragma warning restore 1998
+#pragma warning restore CS1998
 }

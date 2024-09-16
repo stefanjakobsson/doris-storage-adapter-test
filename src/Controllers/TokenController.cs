@@ -42,8 +42,8 @@ public class TokenController(IJwtService jwtService, IOptions<GeneralConfigurati
         var tokenHandler = new JsonWebTokenHandler();
         return tokenHandler.CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = configuration.PublicUrl,
-            Audience = configuration.PublicUrl,
+            Issuer = configuration.PublicUrl.Scheme + "://" + configuration.PublicUrl.Authority,
+            Audience = configuration.PublicUrl.ToString(),
             Subject = new([
                     new Claim("role", role),
                     ..claims

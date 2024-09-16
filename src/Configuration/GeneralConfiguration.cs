@@ -1,10 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace DorisStorageAdapter.Configuration;
 
 public record GeneralConfiguration
 {
     [Required]
-    [Url]
-    public required string PublicUrl { get; init; }
+    public required Uri PublicUrl { get; init; }
 }
