@@ -5,6 +5,7 @@ using DorisStorageAdapter.Services;
 using DorisStorageAdapter.Services.Exceptions;
 using DorisStorageAdapter.Services.Lock;
 using DorisStorageAdapter.Services.Storage;
+using Invio.Extensions.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -102,33 +103,42 @@ var authorizationConfiguration = builder.Configuration
 var generalConfiguration = builder.Configuration.Get<GeneralConfiguration>()!;
 
 // Set up JWT authentication/authorization
-builder.Services.AddAuthentication().AddJwtBearer(options =>
-{
-    if (builder.Environment.IsDevelopment())
+builder.Services
+    .AddAuthentication()
+    .AddJwtBearer(options =>
     {
-        // Disable HTTPS requirement to enable using regular HTTP in development
-        options.RequireHttpsMetadata = false;
-    }
-    else
-    {
-        // MUST be true in production for security reasons!
-        options.RequireHttpsMetadata = true; 
-    }
-
-    // SetJwkOptions sets ValidIssuer and ValidAudience
-    options.SetJwksOptions(
-        new(
-            jwksUri: authorizationConfiguration.JwksUri,
-            audience: generalConfiguration.PublicUrl
-        ));
-
-    // Limiting the valid algorithms to only the one used by Doris hardens security by
-    // making algorithm confusion attacks impossible, but also means that it's harder
-    // for SND to change the signing algorithm.
-    options.TokenValidationParameters.ValidAlgorithms = ["ES256"];
-    // Default clock skew is 5 minutes (!), set to zero
-    options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
-});
+        if (builder.Environment.IsDevelopment())
+        {
+            // Disable HTTPS requirement to enable using regular HTTP in development
+            options.RequireHttpsMetadata = false;
+        }
+        else
+        {
+            // MUST be true in production for security reasons!
+            options.RequireHttpsMetadata = true; 
+        }
+    
+        // SetJwkOptions sets ValidIssuer and ValidAudience
+        options.SetJwksOptions(
+            new(
+                jwksUri: authorizationConfiguration.JwksUri,
+                audience: generalConfiguration.PublicUrl
+            ));
+    
+        // Limiting the valid algorithms to only the one used by Doris hardens security by
+        // making algorithm confusion attacks impossible, but also means that it's harder
+        // for SND to change the signing algorithm.
+        options.TokenValidationParameters.ValidAlgorithms = ["ES256"];
+        // Default clock skew is 5 minutes (!), set to zero
+        options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
+    })
+    // This enables sending the bearer token as an URI query parameter.
+    // We only include this to enable downloading files via browser, which
+    // does not support setting HTTP headers.
+    // The recommended way of setting the bearer token is via the Authorization header
+    // when possible, and only use the URI query parameter when absolutely necessary.
+    // See https://github.com/invio/Invio.Extensions.Authentication.JwtBearer.
+    .AddJwtBearerQueryStringAuthentication();
 
 // Setup up CORS policys per endpoint
 builder.Services.AddCors(options =>
@@ -208,6 +218,9 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 
 app.UseAuthentication();
+// This enables a middleware that redacts bearer token coming in via URI query string.
+// See https://github.com/invio/Invio.Extensions.Authentication.JwtBearer.
+app.UseJwtBearerQueryString();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -115,7 +115,7 @@ public class FileController(
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
         bool restrictToPubliclyAccessible = true;
 
-        if (Request.Headers.Authorization.Count > 0)
+        if (User.Identity != null && User.Identity.IsAuthenticated)
         {
             var defaultPolicy = await authorizationPolicyProvider.GetDefaultPolicyAsync();
             var authorizationResult = await authorizationService.AuthorizeAsync(User, defaultPolicy);
