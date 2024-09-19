@@ -15,13 +15,14 @@ internal sealed class BagItInfo
     private readonly SortedDictionary<string, List<BagItInfoItem>> items = new(StringComparer.Ordinal);
 
     private const string baggingDateLabel = "Bagging-Date";
+    private const string bagGroupIdentifierLabel = "Bag-Group-Identifier";
     private const string bagSizeLabel = "Bag-Size";
     private const string externalIdentifierLabel = "External-Identifier";
-    private const string bagGroupIdentifierLabel = "Bag-Group-Identifier";
     private const string payloadOxumLabel = "Payload-Oxum";
 
     private const string accessRightLabel = "Access-Right";
     private const string datasetStatusLabel = "Dataset-Status";
+    private const string versionLabel = "Version";
 
     // http://publications.europa.eu/resource/authority/access-right/PUBLIC
     private const string publicAccessRightValue = "PUBLIC";
@@ -43,7 +44,11 @@ internal sealed class BagItInfo
 
         set => SetOrRemoveItem(baggingDateLabel, value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
     }
-
+    public string? BagGroupIdentifier
+    {
+        get => GetValue(bagGroupIdentifierLabel, v => v);
+        set => SetOrRemoveItem(bagGroupIdentifierLabel, value);
+    }
     public string? BagSize
     {
         get => GetValue(bagSizeLabel, v => v);
@@ -54,12 +59,6 @@ internal sealed class BagItInfo
     {
         get => GetValue(externalIdentifierLabel, v => v);
         set => SetOrRemoveItem(externalIdentifierLabel, value);
-    }
-
-    public string? BagGroupIdentifier
-    {
-        get => GetValue(bagGroupIdentifierLabel, v => v);
-        set => SetOrRemoveItem(bagGroupIdentifierLabel, value);
     }
 
     public PayloadOxumType? PayloadOxum
@@ -114,6 +113,12 @@ internal sealed class BagItInfo
             Models.DatasetStatus.withdrawn => withdrawnDatasetStatusValue,
             _ => null
         });
+    }
+
+    public string? Version
+    {
+        get => GetValue(versionLabel, v => v);
+        set => SetOrRemoveItem(versionLabel, value);
     }
 
     private void SetOrRemoveItem(string label, string? value)

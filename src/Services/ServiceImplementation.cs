@@ -182,13 +182,14 @@ public class ServiceImplementation(
 
         var bagInfo = new BagItInfo
         {
-            ExternalIdentifier = doi,
-            BagGroupIdentifier = datasetVersion.DatasetIdentifier,
             BaggingDate = DateTime.UtcNow,
+            BagGroupIdentifier = datasetVersion.DatasetIdentifier,
             BagSize = ByteSize.FromBytes(octetCount).ToBinaryString(CultureInfo.InvariantCulture),
+            ExternalIdentifier = doi,
             PayloadOxum = new(octetCount, payloadManifest?.Manifest?.Items?.LongCount() ?? 0),
             AccessRight = accessRight,
-            DatasetStatus = DatasetStatus.completed
+            DatasetStatus = DatasetStatus.completed,
+            Version = datasetVersion.VersionNumber
         };
         byte[] bagInfoContents = bagInfo.Serialize();
 
