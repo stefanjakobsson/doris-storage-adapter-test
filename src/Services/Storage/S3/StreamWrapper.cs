@@ -43,20 +43,41 @@ internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stre
 
     public override void Close()
     {
-        underlyingStream.Close();
-        base.Close();
+        try
+        {
+            underlyingStream.Close();
+        }
+        finally
+        {
+            base.Close();
+        }
     }
 
     protected override void Dispose(bool disposing)
     {
-        underlyingStream.Dispose();
-        base.Dispose(disposing);
+        try
+        {
+            if (disposing)
+            {
+                underlyingStream.Dispose();
+            }
+        }
+        finally
+        {
+            base.Dispose(disposing);
+        }
     }
 
     public async override ValueTask DisposeAsync()
     {
-        await underlyingStream.DisposeAsync().ConfigureAwait(false);
-        await base.DisposeAsync().ConfigureAwait(false);
+        try
+        {
+            await underlyingStream.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
     }
  
     public override void Flush() => underlyingStream.Flush();
