@@ -12,7 +12,6 @@ using Swashbuckle.AspNetCore.Annotations;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -103,7 +102,7 @@ public class FileController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public async Task ImportFiles(
+    public async Task<Results<Ok, ForbidHttpResult>> ImportFiles(
         string datasetIdentifier,
         string versionNumber,
         FileType type,
@@ -112,7 +111,14 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
+        if (!CheckDatasetVersionClaims(datasetVersion))
+        {
+            return TypedResults.Forbid();
+        }
+
         await appService.ImportFiles(datasetVersion, type, fromVersionNumber, cancellationToken);
+
+        return TypedResults.Ok();
     }
     
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
@@ -196,20 +202,21 @@ public class FileController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public async IAsyncEnumerable<File> ListFiles(
+    public Results<Ok<IAsyncEnumerable<File>>, ForbidHttpResult> ListFiles(
         string datasetIdentifier, 
         string versionNumber,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
 
-        await foreach (var file in appService.ListFiles(datasetVersion, cancellationToken))
+        if (!CheckDatasetVersionClaims(datasetVersion))
         {
-            yield return file;
+            return TypedResults.Forbid();
         }
+
+        return TypedResults.Ok(appService.ListFiles(datasetVersion, cancellationToken));
     }
 
     private bool CheckDatasetVersionClaims(DatasetVersionIdentifier datasetVersion) =>
-        User.Claims.Any(c => c.Type == Claims.DatasetIdentifier && c.Value == datasetVersion.DatasetIdentifier) &&
-        User.Claims.Any(c => c.Type == Claims.DatasetVersionNumber && c.Value == datasetVersion.VersionNumber);
+        Claims.CheckClaims(datasetVersion, User.Claims);
 }

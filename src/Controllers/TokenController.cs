@@ -7,7 +7,6 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using NetDevPack.Security.Jwt.Core.Interfaces;
 using System;
-using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -21,21 +20,13 @@ public class TokenController(IJwtService jwtService, IOptions<GeneralConfigurati
     private readonly IJwtService jwtService = jwtService;
     private readonly GeneralConfiguration configuration = configuration.Value;
 
-    [HttpPost("dev/token")]
-    public Task<string> CreateServiceToken()
-    {
-        return CreateToken(Roles.Service, []);
-    }
-
     [HttpPost("dev/token/{datasetIdentifier}/{versionNumber}")]
-    public Task<string> CreateDataAccessToken(string datasetIdentifier, string versionNumber, [FromQuery] bool write)
+    public Task<string> CreateDataAccessToken(string datasetIdentifier, string versionNumber, [FromQuery] string role)
     {
-        return CreateToken(write ? Roles.WriteData : Roles.ReadData, 
-            [new Claim(Claims.DatasetIdentifier, datasetIdentifier),
-            new Claim(Claims.DatasetVersionNumber, versionNumber)]);
+        return CreateToken(datasetIdentifier, versionNumber, role);
     }
 
-    private async Task<string> CreateToken(string role, IEnumerable<Claim> claims)
+    private async Task<string> CreateToken(string datasetIdentifier, string versionNumber, string role)
     {
         var key = await jwtService.GetCurrentSigningCredentials();
 
@@ -46,7 +37,8 @@ public class TokenController(IJwtService jwtService, IOptions<GeneralConfigurati
             Audience = configuration.PublicUrl.ToString(),
             Subject = new([
                     new Claim("role", role),
-                    ..claims
+                    new Claim(Claims.DatasetIdentifier, datasetIdentifier),
+                    new Claim(Claims.DatasetVersionNumber, versionNumber)
                  ]),
             Expires = DateTime.UtcNow.AddHours(1),
             SigningCredentials = key
