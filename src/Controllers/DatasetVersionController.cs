@@ -15,25 +15,6 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
 {
     private readonly ServiceImplementation appService = appService;
 
-    [HttpPut("{datasetIdentifier}/{versionNumber}")]
-    [Authorize(Roles = Roles.Service)]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
-    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
-    public async Task<OkResult> SetupDatasetVersion(
-        string datasetIdentifier, 
-        string versionNumber,
-        CancellationToken cancellationToken)
-    {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
-
-        await appService.SetupDatasetVersion(datasetVersion, cancellationToken);
-
-        return Ok();
-    }
-
     [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
     [Authorize(Roles = Roles.Service)]
     [Consumes("application/x-www-form-urlencoded")]

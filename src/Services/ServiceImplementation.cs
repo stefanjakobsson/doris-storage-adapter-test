@@ -36,78 +36,6 @@ public class ServiceImplementation(
     private const string bagItFileName = "bagit.txt";
     private const string bagInfoFileName = "bag-info.txt";
 
-    public async Task SetupDatasetVersion(
-        DatasetVersionIdentifier datasetVersion,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(datasetVersion);
-
-        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
-        {
-            await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
-            await SetupDatasetVersionImpl(datasetVersion, cancellationToken);
-        },
-        cancellationToken);
-
-        if (!lockSuccessful)
-        {
-            throw new ConflictException();
-        }
-    }
-
-    private async Task SetupDatasetVersionImpl(
-        DatasetVersionIdentifier datasetVersion,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(datasetVersion);
-
-        async Task CopyPayloadManifest(DatasetVersionIdentifier fromVersion, DatasetVersionIdentifier toVersion)
-        {
-            var fileData = await storageService.GetFileData(
-                GetManifestFilePath(fromVersion, true), cancellationToken);
-
-            if (fileData != null)
-            {
-                await StoreFileAndDispose(GetManifestFilePath(toVersion, true), fileData, cancellationToken);
-            }
-        }
-
-        if (await ListPayloadFiles(datasetVersion, cancellationToken)
-                .GetAsyncEnumerator(cancellationToken).MoveNextAsync())
-        {
-            // Payload files present, abort
-            return;
-        }
-
-        if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out string previousVersionNr))
-        {
-            return;
-        }
-
-        var previousVersion = new DatasetVersionIdentifier(datasetVersion.DatasetIdentifier, previousVersionNr);
-        var fetch = await LoadFetch(previousVersion, cancellationToken);
-        var newFetch = new BagItFetch();
-
-        await CopyPayloadManifest(previousVersion, datasetVersion);
-
-        string previousVersionUrl = "../" + UrlEncodePath(GetVersionPath(previousVersion)) + '/';
-
-        foreach (var item in fetch.Items)
-        {
-            newFetch.AddOrUpdateItem(item);
-        }
-
-        await foreach (var file in ListPayloadFiles(previousVersion, CancellationToken.None))
-        {
-            if (!fetch.Contains(file.Path))
-            {
-                newFetch.AddOrUpdateItem(new(file.Path, file.Length, previousVersionUrl + UrlEncodePath(file.Path)));
-            }
-        }
-
-        await StoreFetch(datasetVersion, newFetch, CancellationToken.None);
-    }
-
     public async Task PublishDatasetVersion(
         DatasetVersionIdentifier datasetVersion,
         AccessRight accessRight,
@@ -158,7 +86,7 @@ public class ServiceImplementation(
         var fetch = await LoadFetchWithChecksum();
         long octetCount = 0;
         bool payloadFileFound = false;
-        await foreach (var file in ListPayloadFiles(datasetVersion, cancellationToken))
+        await foreach (var file in ListPayloadFiles(datasetVersion, null, cancellationToken))
         {
             payloadFileFound = true;
             octetCount += file.Length;
@@ -211,8 +139,8 @@ public class ServiceImplementation(
         await StoreManifest(datasetVersion, false, tagManifest, cancellationToken);
         await StoreBagInfo(datasetVersion, bagInfoContents, CancellationToken.None);
         await StoreFileAndDispose(
-            GetBagItFilePath(datasetVersion), 
-            CreateFileDataFromByteArray(bagItContents), 
+            GetBagItFilePath(datasetVersion),
+            CreateFileDataFromByteArray(bagItContents),
             CancellationToken.None);
     }
 
@@ -433,6 +361,97 @@ public class ServiceImplementation(
         await RemoveItemFromFetch(datasetVersion, filePath, CancellationToken.None);
     }
 
+    public async Task ImportFiles(
+       DatasetVersionIdentifier datasetVersion,
+       FileType type,
+       string fromVersionNumber,
+       CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(datasetVersion);
+        ArgumentException.ThrowIfNullOrEmpty(fromVersionNumber);
+
+        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
+        {
+            await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
+            await ImportFilesImpl(
+                datasetVersion, 
+                type, 
+                new(datasetVersion.DatasetIdentifier, fromVersionNumber), 
+                cancellationToken);
+        },
+        cancellationToken);
+
+        if (!lockSuccessful)
+        {
+            throw new ConflictException();
+        }
+    }
+
+    private async Task ImportFilesImpl(
+        DatasetVersionIdentifier datasetVersion,
+        FileType type,
+        DatasetVersionIdentifier fromVersion,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(datasetVersion);
+        ArgumentNullException.ThrowIfNull(fromVersion);
+
+        async Task<BagItFetch> PrepareFetch()
+        {
+            var fromFetch = await LoadFetch(fromVersion, cancellationToken);
+            var fetch = await LoadFetch(datasetVersion, cancellationToken);
+
+            foreach (var item in fromFetch.Items)
+            {
+                if (GetFileType(item.FilePath) == type)
+                {
+                    fetch.AddOrUpdateItem(item);
+                }
+            }
+
+            string fromVersionUrl = "../" + UrlEncodePath(GetVersionPath(fromVersion)) + '/';
+
+            await foreach (var file in ListPayloadFiles(fromVersion, type, cancellationToken))
+            {
+                if (!fromFetch.Contains(file.Path))
+                {
+                    fetch.AddOrUpdateItem(new(file.Path, file.Length, fromVersionUrl + UrlEncodePath(file.Path)));
+                }
+            }
+
+            return fetch;
+        }
+
+        async Task<BagItManifest> PreparePayloadManifest()
+        {
+            var fromManifest = await LoadManifest(fromVersion, true, cancellationToken);
+            var manifest = await LoadManifest(datasetVersion, true, cancellationToken);
+
+            foreach (var item in fromManifest.Items)
+            {
+                if (GetFileType(item.FilePath) == type)
+                {
+                    manifest.AddOrUpdateItem(item);
+                }
+            }
+
+            return manifest;
+        }
+
+        if (await ListPayloadFiles(datasetVersion, type, cancellationToken)
+            .GetAsyncEnumerator(cancellationToken).MoveNextAsync())
+        {
+            // Payload files present for the given file type, abort.
+            return;
+        }
+
+        var fetch = await PrepareFetch();
+        var manifest = await PreparePayloadManifest();
+
+        await StoreFetch(datasetVersion, fetch, cancellationToken);
+        await StoreManifest(datasetVersion, true, manifest, CancellationToken.None);
+    }
+
     public async Task<FileData?> GetFileData(
         DatasetVersionIdentifier datasetVersion,
         FileType type,
@@ -523,7 +542,7 @@ public class ServiceImplementation(
             previousPayloadPath = payloadPath;
         }
 
-        await foreach (var file in ListPayloadFiles(datasetVersion, cancellationToken))
+        await foreach (var file in ListPayloadFiles(datasetVersion, null, cancellationToken))
         {
             result.Add(file);
         }
@@ -589,6 +608,9 @@ public class ServiceImplementation(
         }
     }
 
+    private static string GetPayloadPath(FileType? type) =>
+        "data/" + (type == null ? "" : type.ToString() + '/');
+
     private static string GetFilePathOrThrow(FileType type, string filePath)
     {
         foreach (string pathComponent in filePath.Split('/'))
@@ -601,7 +623,7 @@ public class ServiceImplementation(
             }
         }
 
-        return "data/" + type + '/' + filePath;
+        return GetPayloadPath(type) + filePath;
     }
 
     private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion) =>
@@ -637,21 +659,25 @@ public class ServiceImplementation(
     private static string DecodeUrlEncodedPath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
 
+    private static FileType GetFileType(string path)
+    {
+        if (path.StartsWith(GetPayloadPath(FileType.data), StringComparison.Ordinal))
+        {
+            return FileType.data;
+        }
+
+        if (path.StartsWith(GetPayloadPath(FileType.documentation), StringComparison.Ordinal))
+        {
+            return FileType.documentation;
+        }
+
+        throw new ArgumentException("Not a valid payload path.", nameof(path)); 
+    }
+
     private Models.File ToModelFile(DatasetVersionIdentifier datasetVersion, StorageServiceFile file, byte[]? sha256)
     {
-        FileType type = default;
-        string name = "";
-
-        if (file.Path.StartsWith("data/data/", StringComparison.Ordinal))
-        {
-            type = FileType.data;
-            name = file.Path["data/data/".Length..];
-        }
-        else if (file.Path.StartsWith("data/documentation/", StringComparison.Ordinal))
-        {
-            type = FileType.documentation;
-            name = file.Path["data/documentation/".Length..];
-        }
+        var type = GetFileType(file.Path);
+        string name = file.Path[GetPayloadPath(type).Length..];
 
         return new()
         {
@@ -852,11 +878,14 @@ public class ServiceImplementation(
 
     private async IAsyncEnumerable<StorageServiceFile> ListPayloadFiles(
         DatasetVersionIdentifier datasetVersion,
+        FileType? type,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         string path = GetDatasetVersionPath(datasetVersion);
 
-        await foreach (var file in storageService.ListFiles(path + "data/", cancellationToken))
+        await foreach (var file in storageService.ListFiles(
+            path + GetPayloadPath(type),
+            cancellationToken))
         {
             yield return file with { Path = file.Path[path.Length..] };
         }

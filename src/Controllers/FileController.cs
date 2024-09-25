@@ -97,6 +97,23 @@ public class FileController(
 
         return TypedResults.Ok();
     }
+
+    [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}/import")]
+    [Authorize(Roles = Roles.Service)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
+    public async Task ImportFiles(
+        string datasetIdentifier,
+        string versionNumber,
+        FileType type,
+        [FromQuery, BindRequired] string fromVersionNumber,
+        CancellationToken cancellationToken)
+    {
+        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+
+        await appService.ImportFiles(datasetVersion, type, fromVersionNumber, cancellationToken);
+    }
     
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
     [EnableCors(nameof(GetFileData))]
