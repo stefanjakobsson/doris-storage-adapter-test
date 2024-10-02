@@ -47,9 +47,19 @@ internal sealed class FileSystemStorageService(
         string directoryPath = Path.GetDirectoryName(filePath)!;
         FileInfo fileInfo;
         DateTime? dateCreated = null;
+        bool fileExists = false;
 
         try
         {
+            fileInfo = new FileInfo(filePath);
+            if (fileInfo.Exists)
+            {
+                fileExists = true;
+                dateCreated = fileInfo.CreationTimeUtc;
+            }
+
+            await CreateDirectory(directoryPath, cancellationToken);
+
             using (var stream = new FileStream(tempFile, new FileStreamOptions
             {
                 Access = FileAccess.Write,
@@ -68,14 +78,6 @@ internal sealed class FileSystemStorageService(
             }))
             {
                 await data.Stream.CopyToAsync(stream, cancellationToken);
-            }
-
-            await CreateDirectory(directoryPath, cancellationToken);
-
-            fileInfo = new FileInfo(filePath);
-            if (fileInfo.Exists)
-            {
-                dateCreated = fileInfo.CreationTimeUtc;
             }
 
             File.Move(tempFile, filePath, true);
@@ -106,20 +108,23 @@ internal sealed class FileSystemStorageService(
         try
         {
             // Update creation time if necessary.
-            fileInfo.Refresh();
-            if (dateCreated != null)
+
+            if (fileExists)
             {
-                fileInfo.CreationTimeUtc = dateCreated.Value;
+                fileInfo.CreationTimeUtc = dateCreated!.Value;
+            }
+            else
+            {
+                fileInfo.Refresh();
             }
         }
 #pragma warning disable CA1031 // Do not catch general exception types
         catch
         {
             // Ignore errors here since file has been successfully stored
-            // and updating creation time is not crucial.
+            // and updating fileInfo/creation time is not crucial.
         }
 #pragma warning restore CA1031
-
 
         return new(
             ContentType: null,
@@ -141,7 +146,6 @@ internal sealed class FileSystemStorageService(
         {
             return;
         }
-
 
         try
         {
