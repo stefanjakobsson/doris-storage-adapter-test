@@ -45,19 +45,9 @@ internal sealed class FileSystemStorageService(
 
         string tempFile = Path.Combine(tempFilePath, Guid.NewGuid().ToString());
         string directoryPath = Path.GetDirectoryName(filePath)!;
-        FileInfo fileInfo;
-        DateTime? dateCreated = null;
-        bool fileExists = false;
 
         try
         {
-            fileInfo = new FileInfo(filePath);
-            if (fileInfo.Exists)
-            {
-                fileExists = true;
-                dateCreated = fileInfo.CreationTimeUtc;
-            }
-
             await CreateDirectory(directoryPath, cancellationToken);
 
             using (var stream = new FileStream(tempFile, new FileStreamOptions
@@ -105,31 +95,23 @@ internal sealed class FileSystemStorageService(
             throw;
         }
 
+        DateTime? dateModified = null;
         try
         {
-            // Update creation time if necessary.
-
-            if (fileExists)
-            {
-                fileInfo.CreationTimeUtc = dateCreated!.Value;
-            }
-            else
-            {
-                fileInfo.Refresh();
-            }
+            dateModified = File.GetLastWriteTimeUtc(filePath);
         }
 #pragma warning disable CA1031 // Do not catch general exception types
         catch
         {
             // Ignore errors here since file has been successfully stored
-            // and updating fileInfo/creation time is not crucial.
+            // returning the correct modified date is not crucial.
         }
 #pragma warning restore CA1031
 
         return new(
             ContentType: null,
-            DateCreated: dateCreated ?? fileInfo.CreationTimeUtc,
-            DateModified: fileInfo.LastWriteTimeUtc);
+            DateCreated: null,
+            DateModified: dateModified ?? DateTime.UtcNow);
     }
 
     public async Task DeleteFile(string filePath, CancellationToken cancellationToken)
@@ -263,7 +245,7 @@ internal sealed class FileSystemStorageService(
 
             yield return new(
               ContentType: null,
-              DateCreated: file.CreationTimeUtc,
+              DateCreated: null,
               DateModified: file.LastWriteTimeUtc,
               Path: NormalizePath(relativePath),
               Length: file.Length);
