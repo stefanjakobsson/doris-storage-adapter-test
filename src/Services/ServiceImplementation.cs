@@ -239,7 +239,7 @@ public class ServiceImplementation(
         FileData data,
         CancellationToken cancellationToken)
     {
-        async Task<string?> Deduplicate(byte[] checksum)
+        /*async Task<string?> Deduplicate(byte[] checksum)
         {
             if (!TryGetPreviousVersionNumber(datasetVersion.VersionNumber, out var prevVersionNr))
             {
@@ -270,7 +270,7 @@ public class ServiceImplementation(
             return "../" +
                 UrlEncodePath(GetVersionPath(prevVersion)) + '/' +
                 UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
-        }
+        }*/
 
         StorageServiceFileBase result;
         byte[] checksum;
@@ -290,7 +290,7 @@ public class ServiceImplementation(
         // From this point on we do not want to cancel the operation,
         // since the file has been successfully stored.
 
-        string? url = await Deduplicate(checksum);
+        /*string? url = await Deduplicate(checksum);
         if (url != null)
         {
             // Deduplication was successful, store in fetch and delete uploaded file
@@ -301,9 +301,12 @@ public class ServiceImplementation(
         {
             // File is not a duplicate, remove from fetch if present there
             await RemoveItemFromFetch(datasetVersion, filePath, CancellationToken.None);
-        }
+        }*/
 
-        // Update payload manifest
+        // Remove from fetch if present there.
+        await RemoveItemFromFetch(datasetVersion, filePath, CancellationToken.None);
+
+        // Update payload manifest.
         await AddOrUpdatePayloadManifestItem(datasetVersion, new(filePath, checksum), CancellationToken.None);
 
         return ToModelFile(datasetVersion, new(
