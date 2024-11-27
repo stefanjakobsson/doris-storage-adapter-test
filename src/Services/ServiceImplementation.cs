@@ -691,7 +691,6 @@ public class ServiceImplementation(
             DateModified = file.DateModified,
             EncodingFormat = file.ContentType ?? MimeTypes.GetMimeType(file.Path),
             Sha256 = sha256 == null ? null : Convert.ToHexString(sha256),
-            // If PublicUrl contains a subpath and does not end in a slash, this will fail. Fix?
             Url = new Uri(generalConfiguration.PublicUrl, "file/" +
                 UrlEncodePath(datasetVersion.DatasetIdentifier + '/' + datasetVersion.VersionNumber + '/' + type) +
                 "?filePath=" + Uri.EscapeDataString(name))

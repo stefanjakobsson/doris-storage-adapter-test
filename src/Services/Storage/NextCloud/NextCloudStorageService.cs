@@ -15,7 +15,7 @@ using WebDav;
 
 namespace DorisStorageAdapter.Services.Storage.NextCloud;
 
-internal class NextCloudStorageService : IStorageService
+internal sealed class NextCloudStorageService : IStorageService
 {
     private readonly ILockService lockService;
     private readonly IWebDavClient webDavClient;
@@ -34,11 +34,7 @@ internal class NextCloudStorageService : IStorageService
         this.configuration = configuration.Value;
         this.lockService = lockService;
 
-        var baseUri = this.configuration.BaseUrl.AbsoluteUri.EndsWith('/') ?
-            this.configuration.BaseUrl :
-            new(this.configuration.BaseUrl.AbsoluteUri + '/');
-
-        var filesBaseUri = GetUri(baseUri, $"remote.php/dav/files/{this.configuration.User}/");
+        var filesBaseUri = GetUri(this.configuration.BaseUrl, $"remote.php/dav/files/{this.configuration.User}/");
 
         storageBaseUri = GetUri(filesBaseUri, $"{this.configuration.BasePath}" +
             (this.configuration.BasePath.EndsWith('/') ? "" : '/'));
@@ -46,7 +42,7 @@ internal class NextCloudStorageService : IStorageService
         tmpFileBaseUri = GetUri(filesBaseUri, $"{this.configuration.TempFilePath}" +
              (this.configuration.TempFilePath.EndsWith('/') ? "" : '/'));
 
-        chunkedUploadBaseUri = GetUri(baseUri, $"remote.php/dav/uploads/{this.configuration.User}/");
+        chunkedUploadBaseUri = GetUri(this.configuration.BaseUrl, $"remote.php/dav/uploads/{this.configuration.User}/");
     }
 
     public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data, CancellationToken cancellationToken)
