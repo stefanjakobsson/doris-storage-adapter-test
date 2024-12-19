@@ -574,6 +574,7 @@ public class ServiceImplementation(
 
         var payloadManifest = await LoadManifest(datasetVersion, true, cancellationToken);
         var fetch = await LoadFetch(datasetVersion, cancellationToken);
+        string versionPath = GetVersionPath(datasetVersion);
 
         using var zipArchive = new ZipArchive(stream, ZipArchiveMode.Create, false);
         var zipManifest = new BagItManifest();
@@ -593,7 +594,7 @@ public class ServiceImplementation(
 
             if (data != null)
             {
-                using var entryStream = CreateZipEntryStream(zipArchive, zipFilePath);
+                using var entryStream = CreateZipEntryStream(zipArchive, versionPath + '/' + zipFilePath);
                 using (data.Stream)
                 {
                     await data.Stream.CopyToAsync(entryStream, cancellationToken);
@@ -605,7 +606,8 @@ public class ServiceImplementation(
 
         if (zipManifest.Items.Any())
         {
-            using var entryStream = CreateZipEntryStream(zipArchive, payloadManifestSha256FileName);
+            using var entryStream = CreateZipEntryStream(
+                zipArchive, versionPath + '/' + payloadManifestSha256FileName);
             var content = zipManifest.Serialize();
             await entryStream.WriteAsync(content, cancellationToken);
         }
