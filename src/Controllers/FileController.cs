@@ -21,7 +21,7 @@ namespace DorisStorageAdapter.Controllers;
 public class FileController(
     ServiceImplementation appService,
     IAuthorizationService authorizationService,
-    IAuthorizationPolicyProvider authorizationPolicyProvider) : Controller
+    IAuthorizationPolicyProvider authorizationPolicyProvider) : ControllerBase
 {
     private readonly ServiceImplementation appService = appService;
     private readonly IAuthorizationService authorizationService = authorizationService;

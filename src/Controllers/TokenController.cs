@@ -15,7 +15,7 @@ namespace DorisStorageAdapter.Controllers;
 [DevOnly]
 [ApiExplorerSettings(IgnoreApi = true)]
 [ApiController]
-public class TokenController(IJwtService jwtService, IOptions<GeneralConfiguration> configuration) : Controller
+public class TokenController(IJwtService jwtService, IOptions<GeneralConfiguration> configuration) : ControllerBase
 {
     private readonly IJwtService jwtService = jwtService;
     private readonly GeneralConfiguration configuration = configuration.Value;

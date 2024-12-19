@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace DorisStorageAdapter.Controllers;
 
 [ApiController]
-public class DatasetVersionController(ServiceImplementation appService) : Controller
+public class DatasetVersionController(ServiceImplementation appService) : ControllerBase
 {
     private readonly ServiceImplementation appService = appService;
 
