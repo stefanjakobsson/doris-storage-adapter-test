@@ -767,11 +767,11 @@ public class ServiceImplementation(
         CancellationToken cancellationToken) =>
         LockAndUpdatePayloadManifest(datasetVersion, manifest => manifest.AddOrUpdateItem(item), cancellationToken);
 
-    private Task AddOrUpdateFetchItem(
+    /*private Task AddOrUpdateFetchItem(
         DatasetVersionIdentifier datasetVersion,
         BagItFetchItem item,
         CancellationToken cancellationToken) =>
-        LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item), cancellationToken);
+        LockAndUpdateFetch(datasetVersion, fetch => fetch.AddOrUpdateItem(item), cancellationToken);*/
 
     private Task RemoveItemFromPayloadManifest(
         DatasetVersionIdentifier datasetVersion,
@@ -919,7 +919,7 @@ public class ServiceImplementation(
         }
     }
 
-    private static bool TryGetPreviousVersionNumber(string versionNumber, out string previousVersionNumber)
+    /*private static bool TryGetPreviousVersionNumber(string versionNumber, out string previousVersionNumber)
     {
         var values = versionNumber.Split('.');
         int versionMajor = int.Parse(values[0], CultureInfo.InvariantCulture);
@@ -932,5 +932,5 @@ public class ServiceImplementation(
 
         previousVersionNumber = "";
         return false;
-    }
+    }*/
 }
