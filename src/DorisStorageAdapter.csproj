@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="AsyncKeyedLock" Version="7.1.4" />
-    <PackageReference Include="AWSSDK.S3" Version="3.7.410.8" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.411.1" />
     <PackageReference Include="ByteSize" Version="2.1.2" />
     <PackageReference Include="Invio.Extensions.Authentication.JwtBearer" Version="2.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
