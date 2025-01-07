@@ -377,9 +377,9 @@ public class ServiceImplementation(
         {
             await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
             await ImportFilesImpl(
-                datasetVersion, 
-                type, 
-                new(datasetVersion.DatasetIdentifier, fromVersionNumber), 
+                datasetVersion,
+                type,
+                new(datasetVersion.DatasetIdentifier, fromVersionNumber),
                 cancellationToken);
         },
         cancellationToken);
@@ -631,8 +631,35 @@ public class ServiceImplementation(
         return GetPayloadPath(type) + filePath;
     }
 
-    private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion) =>
-        datasetVersion.DatasetIdentifier + '/';
+    private static string GetDatasetPath(DatasetVersionIdentifier datasetVersion)
+    {
+        // If dataset identifier begins with one of the legacy prefixes,
+        // use that prefix as a base path.
+        // Otherwise, use the string left of the first '-' as base path, or 
+        // empty string if there is no '-' in the dataset identifier.
+
+        string[] legacyPrefixes = ["ecds", "ext", "snd"];
+
+        string basePath = legacyPrefixes.FirstOrDefault(p => 
+            datasetVersion.DatasetIdentifier.StartsWith(p, StringComparison.Ordinal)) ?? "";
+
+        if (string.IsNullOrEmpty(basePath))
+        {
+            int index = datasetVersion.DatasetIdentifier.IndexOf('-', StringComparison.Ordinal);
+
+            if (index > 0)
+            {
+                basePath = datasetVersion.DatasetIdentifier[..index];
+            }
+        }
+
+        if (!string.IsNullOrEmpty(basePath))
+        {
+            basePath += '/';
+        }
+
+        return basePath + datasetVersion.DatasetIdentifier + '/';
+    }
 
     private static string GetVersionPath(DatasetVersionIdentifier datasetVersion) =>
         datasetVersion.DatasetIdentifier + '-' + datasetVersion.VersionNumber;
@@ -676,7 +703,7 @@ public class ServiceImplementation(
             return FileType.documentation;
         }
 
-        throw new ArgumentException("Not a valid payload path.", nameof(path)); 
+        throw new ArgumentException("Not a valid payload path.", nameof(path));
     }
 
     private Models.File ToModelFile(DatasetVersionIdentifier datasetVersion, StorageServiceFile file, byte[]? sha256)
