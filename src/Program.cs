@@ -155,20 +155,6 @@ builder.Services.AddCors(options =>
         policy.WithHeaders(HeaderNames.Authorization);
         policy.WithMethods(HttpMethods.Delete);
     });
-    options.AddPolicy(nameof(FileController.GetFileData), policy =>
-    {
-        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
-        policy.WithHeaders(HeaderNames.Authorization);
-        policy.WithMethods(HttpMethods.Get);
-        policy.WithExposedHeaders(HeaderNames.ContentDisposition);
-    });
-    options.AddPolicy(nameof(FileController.GetFileDataAsZip), policy =>
-    {
-        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
-        policy.WithHeaders(HeaderNames.Authorization);
-        policy.WithMethods(HttpMethods.Get);
-        policy.WithExposedHeaders(HeaderNames.ContentDisposition);
-    });
 });
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();

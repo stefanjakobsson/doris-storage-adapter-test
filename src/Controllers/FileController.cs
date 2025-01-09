@@ -122,7 +122,6 @@ public class FileController(
     }
     
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
-    [EnableCors(nameof(GetFileData))]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
@@ -168,7 +167,6 @@ public class FileController(
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]
     [Authorize(Roles = Roles.ReadData)]
-    [EnableCors(nameof(GetFileDataAsZip))]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), MediaTypeNames.Application.Zip)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
