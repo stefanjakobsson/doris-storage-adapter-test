@@ -93,7 +93,7 @@ internal sealed class NextCloudStorageService : IStorageService
 
         async Task<long> DoChunkedUpload()
         {
-            var uri = new Uri(chunkedUploadBaseUri, "doris-storage-adapter-" + Guid.NewGuid().ToString() + "/");
+            var uri = new Uri(chunkedUploadBaseUri, "doris-storage-adapter-" + Guid.NewGuid().ToString() + '/');
             // Add Destination header to all calls to ensure we use v2 of NextCloud's chunked upload API.
             var destinationHeader = KeyValuePair.Create("Destination", fileUri.AbsoluteUri);
             long now;

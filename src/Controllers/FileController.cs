@@ -191,7 +191,7 @@ public class FileController(
                 Response.BodyWriter.AsStream(),
                 cancellationToken),
             MediaTypeNames.Application.Zip, 
-            datasetIdentifier + "-" + versionNumber + ".zip");
+            datasetIdentifier + '-' + versionNumber + ".zip");
     }
 
     [HttpGet("file/{datasetIdentifier}/{versionNumber}")]

@@ -180,7 +180,7 @@ internal sealed class BagItInfo
             if (line.StartsWith(' ') || line.StartsWith('\t'))
             {
                 // value is continued from previous line
-                value += " " + line.TrimStart();
+                value += ' ' + line.TrimStart();
             }
             else
             {
@@ -202,7 +202,7 @@ internal sealed class BagItInfo
     {
         var values = items.Values.SelectMany(i => i).Select(i => i.Label + ": " + i.Value);
 
-        return Encoding.UTF8.GetBytes(string.Join("\n", values));
+        return Encoding.UTF8.GetBytes(string.Join('\n', values));
     }
 
     public sealed record PayloadOxumType(long OctetCount, long StreamCount);

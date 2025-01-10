@@ -101,10 +101,10 @@ internal sealed class BagItManifest
     public byte[] Serialize()
     {
         var values = Items.Select(i =>
-            Convert.ToHexString(i.Checksum) + " " +
+            Convert.ToHexString(i.Checksum) + ' ' +
             BagitHelpers.EncodeFilePath(i.FilePath));
 
-        return Encoding.UTF8.GetBytes(string.Join("\n", values));
+        return Encoding.UTF8.GetBytes(string.Join('\n', values));
     }
 
     public IEnumerable<BagItManifestItem> Items => items.Values;

@@ -32,7 +32,7 @@ internal sealed class NextCloudStorageServiceConfigurer : IStorageServiceConfigu
         {
             var nextCloudConfiguration = sp.GetRequiredService<IOptions<NextCloudStorageServiceConfiguration>>().Value;
             
-            string authString = nextCloudConfiguration.User + ":" + nextCloudConfiguration.Password;
+            string authString = nextCloudConfiguration.User + ':' + nextCloudConfiguration.Password;
             string basicAuth = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(authString));
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", basicAuth);
 

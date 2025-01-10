@@ -70,7 +70,7 @@ internal sealed class BagItFetch
             (i.Length?.ToString(CultureInfo.InvariantCulture) ?? "-") + ' ' +
             BagitHelpers.EncodeFilePath(i.FilePath));
 
-        return Encoding.UTF8.GetBytes(string.Join("\n", values));
+        return Encoding.UTF8.GetBytes(string.Join('\n', values));
     }
 
     public IEnumerable<BagItFetchItem> Items => items.Values;
