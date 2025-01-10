@@ -140,7 +140,7 @@ builder.Services
     // See https://github.com/invio/Invio.Extensions.Authentication.JwtBearer.
     .AddJwtBearerQueryStringAuthentication();
 
-// Setup up CORS policys per endpoint
+// Set up CORS policys per endpoint
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(nameof(FileController.StoreFile), policy =>

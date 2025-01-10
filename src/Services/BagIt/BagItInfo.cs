@@ -198,7 +198,6 @@ internal sealed class BagItInfo
         return result;
     }
 
-
     public byte[] Serialize()
     {
         var values = items.Values.SelectMany(i => i).Select(i => i.Label + ": " + i.Value);
