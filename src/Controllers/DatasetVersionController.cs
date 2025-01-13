@@ -16,7 +16,7 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
 {
     private readonly ServiceImplementation appService = appService;
 
-    [HttpPut("{datasetIdentifier}/{versionNumber}/publish")]
+    [HttpPut("{identifier}/{version}/publish")]
     [Authorize(Roles = Roles.Service)]
     [Consumes("application/x-www-form-urlencoded")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -25,13 +25,13 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<Results<Ok, ForbidHttpResult>> PublishDatasetVersion(
-        string datasetIdentifier,
-        string versionNumber,
+        string identifier,
+        string version,
         [FromForm(Name = "access_right")] AccessRight accessRight,
         [FromForm] string doi,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
@@ -43,7 +43,7 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
         return TypedResults.Ok();
     }
 
-    [HttpPut("{datasetIdentifier}/{versionNumber}/withdraw")]
+    [HttpPut("{identifier}/{version}/withdraw")]
     [Authorize(Roles = Roles.Service)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
@@ -51,11 +51,11 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<Results<Ok, ForbidHttpResult>> WithdrawDatasetVersion(
-        string datasetIdentifier, 
-        string versionNumber,
+        string identifier, 
+        string version,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
@@ -67,6 +67,6 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
         return TypedResults.Ok();
     }
 
-    private bool CheckDatasetVersionClaims(DatasetVersionIdentifier datasetVersion) =>
+    private bool CheckDatasetVersionClaims(DatasetVersion datasetVersion) =>
        Claims.CheckClaims(datasetVersion, User.Claims);
 }

@@ -8,8 +8,8 @@ namespace DorisStorageAdapter.Services.Lock;
 
 internal sealed class InProcessLockService : ILockService, IDisposable
 {
-    private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionSharedLocks = new(new AsyncKeyedLockOptions(maxCount: int.MaxValue));
-    private readonly AsyncKeyedLocker<DatasetVersionIdentifier> datasetVersionExclusiveLocks = new();
+    private readonly AsyncKeyedLocker<DatasetVersion> datasetVersionSharedLocks = new(new AsyncKeyedLockOptions(maxCount: int.MaxValue));
+    private readonly AsyncKeyedLocker<DatasetVersion> datasetVersionExclusiveLocks = new();
     private readonly AsyncKeyedLocker<string> pathLocks = new();
 
     public async Task<IDisposable> LockPath(string path, CancellationToken cancellationToken)
@@ -26,7 +26,7 @@ internal sealed class InProcessLockService : ILockService, IDisposable
     }
 
     public async Task<bool> TryLockDatasetVersionExclusive(
-        DatasetVersionIdentifier datasetVersion, 
+        DatasetVersion datasetVersion, 
         Func<Task> task, 
         CancellationToken cancellationToken)
     {
@@ -49,7 +49,7 @@ internal sealed class InProcessLockService : ILockService, IDisposable
     }
 
     public async Task<bool> TryLockDatasetVersionShared(
-        DatasetVersionIdentifier datasetVersion, 
+        DatasetVersion datasetVersion, 
         Func<Task> task, 
         CancellationToken cancellationToken)
     {

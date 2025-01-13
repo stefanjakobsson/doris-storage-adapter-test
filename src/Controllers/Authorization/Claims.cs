@@ -7,9 +7,9 @@ namespace DorisStorageAdapter.Controllers.Authorization;
 internal static class Claims
 {
     public const string DatasetIdentifier = "dataset_identifier";
-    public const string DatasetVersionNumber = "dataset_version_number";
+    public const string DatasetVersion = "dataset_version";
 
-    public static bool CheckClaims(DatasetVersionIdentifier datasetVersion, IEnumerable<Claim> claims)
+    public static bool CheckClaims(DatasetVersion datasetVersion, IEnumerable<Claim> claims)
     {
         bool identifierFound = false;
         bool versionFound = false;
@@ -18,7 +18,7 @@ internal static class Claims
         {
             if (claim.Type == DatasetIdentifier)
             {
-                if (claim.Value == datasetVersion.DatasetIdentifier)
+                if (claim.Value == datasetVersion.Identifier)
                 {
                     identifierFound = true;
                 }
@@ -27,9 +27,9 @@ internal static class Claims
                     return false;
                 }
             }
-            else if (claim.Type == DatasetVersionNumber)
+            else if (claim.Type == DatasetVersion)
             {
-                if (claim.Value == datasetVersion.VersionNumber)
+                if (claim.Value == datasetVersion.Version)
                 {
                     versionFound = true;
                 }

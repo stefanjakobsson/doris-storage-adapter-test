@@ -17,12 +17,12 @@ public interface ILockService
         CancellationToken cancellationToken);
 
     Task<bool> TryLockDatasetVersionExclusive(
-        DatasetVersionIdentifier datasetVersion, 
+        DatasetVersion datasetVersion, 
         Func<Task> task, 
         CancellationToken cancellationToken);
 
     Task<bool> TryLockDatasetVersionShared(
-        DatasetVersionIdentifier datasetVersion, 
+        DatasetVersion datasetVersion, 
         Func<Task> task, 
         CancellationToken cancellationToken);
 }

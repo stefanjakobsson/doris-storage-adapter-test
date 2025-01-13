@@ -27,7 +27,7 @@ public class FileController(
     private readonly IAuthorizationService authorizationService = authorizationService;
     private readonly IAuthorizationPolicyProvider authorizationPolicyProvider = authorizationPolicyProvider;
 
-    [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [HttpPut("file/{identifier}/{version}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     [DisableRequestSizeLimit] // Disable request size limit to allow streaming large files
     // DisableFormValueModelBinding makes sure that ASP.NET does not try to parse the body as form data
@@ -42,13 +42,13 @@ public class FileController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status411LengthRequired, MediaTypeNames.Application.ProblemJson)]
     public async Task<Results<Ok<File>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
-        string datasetIdentifier,
-        string versionNumber,
+        string identifier,
+        string version,
         FileType type,
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
@@ -70,7 +70,7 @@ public class FileController(
         return TypedResults.Ok(result);
     }
 
-    [HttpDelete("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [HttpDelete("file/{identifier}/{version}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     [EnableCors(nameof(DeleteFile))]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -79,13 +79,13 @@ public class FileController(
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     public async Task<Results<Ok, ForbidHttpResult>> DeleteFile(
-        string datasetIdentifier,
-        string versionNumber,
+        string identifier,
+        string version,
         FileType type,
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
@@ -97,44 +97,44 @@ public class FileController(
         return TypedResults.Ok();
     }
 
-    [HttpPut("file/{datasetIdentifier}/{versionNumber}/{type}/import")]
+    [HttpPut("file/{identifier}/{version}/{type}/import")]
     [Authorize(Roles = Roles.Service)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     public async Task<Results<Ok, ForbidHttpResult>> ImportFiles(
-        string datasetIdentifier,
-        string versionNumber,
+        string identifier,
+        string version,
         FileType type,
-        [FromQuery, BindRequired] string fromVersionNumber,
+        [FromQuery, BindRequired] string fromVersion,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
-        await appService.ImportFiles(datasetVersion, type, fromVersionNumber, cancellationToken);
+        await appService.ImportFiles(datasetVersion, type, fromVersion, cancellationToken);
 
         return TypedResults.Ok();
     }
     
-    [HttpGet("file/{datasetIdentifier}/{versionNumber}/{type}")]
+    [HttpGet("file/{identifier}/{version}/{type}")]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(void), StatusCodes.Status404NotFound)]
     public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetFileData(
-        string datasetIdentifier,
-        string versionNumber,
+        string identifier,
+        string version,
         FileType type,
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
         bool restrictToPubliclyAccessible = true;
 
         if (User.Identity != null && User.Identity.IsAuthenticated)
@@ -165,19 +165,19 @@ public class FileController(
         return TypedResults.Stream(fileData.Stream, fileData.ContentType, filePath.Split('/').Last());
     }
 
-    [HttpGet("file/{datasetIdentifier}/{versionNumber}/zip")]
+    [HttpGet("file/{identifier}/{version}/zip")]
     [Authorize(Roles = Roles.ReadData)]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), MediaTypeNames.Application.Zip)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     public Results<PushStreamHttpResult, ForbidHttpResult> GetFileDataAsZip(
-        string datasetIdentifier,
-        string versionNumber,
+        string identifier,
+        string version,
         [FromQuery] string[] path,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
@@ -191,21 +191,21 @@ public class FileController(
                 Response.BodyWriter.AsStream(),
                 cancellationToken),
             MediaTypeNames.Application.Zip, 
-            datasetIdentifier + '-' + versionNumber + ".zip");
+            identifier + '-' + version + ".zip");
     }
 
-    [HttpGet("file/{datasetIdentifier}/{versionNumber}")]
+    [HttpGet("file/{identifier}/{version}")]
     [Authorize(Roles = Roles.Service)]
     [ProducesResponseType<IEnumerable<File>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     public Results<Ok<IAsyncEnumerable<File>>, ForbidHttpResult> ListFiles(
-        string datasetIdentifier, 
-        string versionNumber,
+        string identifier, 
+        string version,
         CancellationToken cancellationToken)
     {
-        var datasetVersion = new DatasetVersionIdentifier(datasetIdentifier, versionNumber);
+        var datasetVersion = new DatasetVersion(identifier, version);
 
         if (!CheckDatasetVersionClaims(datasetVersion))
         {
@@ -215,6 +215,6 @@ public class FileController(
         return TypedResults.Ok(appService.ListFiles(datasetVersion, cancellationToken));
     }
 
-    private bool CheckDatasetVersionClaims(DatasetVersionIdentifier datasetVersion) =>
+    private bool CheckDatasetVersionClaims(DatasetVersion datasetVersion) =>
         Claims.CheckClaims(datasetVersion, User.Claims);
 }

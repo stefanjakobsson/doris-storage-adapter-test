@@ -20,13 +20,13 @@ public class TokenController(IJwtService jwtService, IOptions<GeneralConfigurati
     private readonly IJwtService jwtService = jwtService;
     private readonly GeneralConfiguration configuration = configuration.Value;
 
-    [HttpPost("dev/token/{datasetIdentifier}/{versionNumber}")]
-    public Task<string> CreateDataAccessToken(string datasetIdentifier, string versionNumber, [FromQuery] string role)
+    [HttpPost("dev/token/{identifier}/{version}")]
+    public Task<string> CreateDataAccessToken(string identifier, string version, [FromQuery] string role)
     {
-        return CreateToken(datasetIdentifier, versionNumber, role);
+        return CreateToken(identifier, version, role);
     }
 
-    private async Task<string> CreateToken(string datasetIdentifier, string versionNumber, string role)
+    private async Task<string> CreateToken(string identifier, string version, string role)
     {
         var key = await jwtService.GetCurrentSigningCredentials();
 
@@ -37,8 +37,8 @@ public class TokenController(IJwtService jwtService, IOptions<GeneralConfigurati
             Audience = configuration.PublicUrl.ToString(),
             Subject = new([
                     new Claim("role", role),
-                    new Claim(Claims.DatasetIdentifier, datasetIdentifier),
-                    new Claim(Claims.DatasetVersionNumber, versionNumber)
+                    new Claim(Claims.DatasetIdentifier, identifier),
+                    new Claim(Claims.DatasetVersion, version)
                  ]),
             Expires = DateTime.UtcNow.AddHours(1),
             SigningCredentials = key
