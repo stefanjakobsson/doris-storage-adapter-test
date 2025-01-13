@@ -32,6 +32,10 @@ builder.Services.AddOptionsWithValidateOnStart<AuthorizationConfiguration>()
     .Bind(builder.Configuration.GetSection(AuthorizationConfiguration.ConfigurationSection))
     .ValidateDataAnnotations();
 
+builder.Services.AddOptionsWithValidateOnStart<StorageConfiguration>()
+    .Bind(builder.Configuration.GetSection(StorageConfiguration.ConfigurationSection))
+    .ValidateDataAnnotations();
+
 static void SetupJsonSerializer(JsonSerializerOptions options)
 {
     options.Converters.Add(new JsonStringEnumConverter());
@@ -163,10 +167,9 @@ builder.Services.AddTransient<ServiceImplementation>();
 // Setup storage service based on configuration
 void SetupStorageService()
 {
-    var configSection = builder.Configuration.GetSection("Storage");
-    const string configKey = "ActiveStorageService";
-    string storageService = configSection.GetValue<string>(configKey) ??
-        throw new StorageServiceConfigurationException($"{configKey} not set.");
+    var configSection = builder.Configuration.GetSection(StorageConfiguration.ConfigurationSection);
+    var storageConfiguration = configSection.Get<StorageConfiguration>()!;
+    string storageService = storageConfiguration.ActiveStorageService;
 
     var types = typeof(Program).Assembly.GetTypes()
         .Where(t =>
@@ -178,11 +181,11 @@ void SetupStorageService()
 
     if (types.Count == 0)
     {
-        throw new StorageServiceConfigurationException($"{storageService} not found.");
+        throw new StorageServiceConfigurationException($"No implementation of '{storageService}' found.");
     }
     else if (types.Count > 1)
     {
-        throw new StorageServiceConfigurationException($"Multiple implementations of {storageService} found.");
+        throw new StorageServiceConfigurationException($"Multiple implementations of '{storageService}' found.");
     }
 
     var configurer = Activator.CreateInstance(types[0]) as IStorageServiceConfigurerBase;
