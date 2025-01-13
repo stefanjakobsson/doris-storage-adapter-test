@@ -839,7 +839,7 @@ public class ServiceImplementation(
     {
         // This method assumes that there is no exlusive lock on datasetVersion
 
-        using (await lockService.LockPath(GetFullFilePath(datasetVersion, fetchFileName), cancellationToken))
+        using (await lockService.LockPath(GetFetchFilePath(datasetVersion), cancellationToken))
         {
             var fetch = await LoadFetch(datasetVersion, cancellationToken);
 
