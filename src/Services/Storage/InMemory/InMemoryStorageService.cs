@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -30,19 +31,27 @@ internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorage
         return Task.CompletedTask;
     }
 
-    public Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
+    public Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (storage.TryGet(filePath, out var file))
         {
-            return Task.FromResult<FileData?>(new(
-                Stream: new MemoryStream(file.Data), 
-                Length: file.Data.LongLength, 
+            Stream stream = new MemoryStream(file.Data);
+
+            if (byteRange != null)
+            {
+                stream = StreamHelpers.CreateByteRangeStream(stream, byteRange);
+            }
+
+            return Task.FromResult<PartialFileData?>(new(
+                Stream: stream, 
+                StreamLength: stream.Length,
+                TotalLength: file.Data.LongLength,
                 ContentType: file.Metadata.ContentType));
         }
 
-        return Task.FromResult<FileData?>(null);
+        return Task.FromResult<PartialFileData?>(null);
     }
 
 #pragma warning disable CS1998 // This async method lacks 'await'

@@ -26,8 +26,8 @@ internal sealed class ByteArrayComparer : IEqualityComparer<byte[]>
     /// </summary>
     public bool Equals(byte[]? obj1, byte[]? obj2)
     {
-        //    We can make use of the StructuralEqualityComparar class to see if these
-        //    two arrays are equaly based on their value sequences.
+        // Make use of the StructuralEqualityComparar class to see if these
+        // two arrays are equaly based on their value sequences.
         return StructuralComparisons.StructuralEqualityComparer.Equals(obj1, obj2);
     }
 
@@ -37,8 +37,8 @@ internal sealed class ByteArrayComparer : IEqualityComparer<byte[]>
     /// <param name = "obj">The byte array to generate a hash code for.</param>
     public int GetHashCode(byte[] obj)
     {
-        //    Just like in the Equals method, we can use the StructuralEqualityComparer
-        //    class to generate a hashcode for the object.
+        // Just like in the Equals method, use the StructuralEqualityComparer
+        // class to generate a hashcode for the object.
         return StructuralComparisons.StructuralEqualityComparer.GetHashCode(obj);
     }
 }

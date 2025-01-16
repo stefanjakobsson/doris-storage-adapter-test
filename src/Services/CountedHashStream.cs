@@ -46,6 +46,7 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
         get => underlyingStream.WriteTimeout;
         set => underlyingStream.WriteTimeout = value;
     }
+
     public override void Close()
     {
         try
@@ -131,19 +132,8 @@ internal sealed class CountedHashStream(Stream underlyingStream) : Stream
         return bytesRead;
     }
 
-    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-    {
-#pragma warning disable IDE0079 // Remove unnecessary suppression
-#pragma warning disable CA1835 //  Prefer the memory-based overloads of ReadAsync/WriteAsync methods in stream-based classes
-        var bytesRead = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-#pragma warning restore CA1835
-#pragma warning restore IDE0079
-
-        this.bytesRead += bytesRead;
-        sha256hasher.AppendData(buffer, offset, bytesRead);
-
-        return bytesRead;
-    }
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        ReadAsync(buffer.AsMemory().Slice(offset, count), cancellationToken).AsTask();
 
     public override int ReadByte()
     {

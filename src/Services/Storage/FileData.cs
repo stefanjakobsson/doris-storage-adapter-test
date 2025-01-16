@@ -3,6 +3,6 @@
 namespace DorisStorageAdapter.Services.Storage;
 
 public record FileData(
-    Stream Stream, 
-    long Length,
+    Stream Stream,
+    long StreamLength,
     string? ContentType);

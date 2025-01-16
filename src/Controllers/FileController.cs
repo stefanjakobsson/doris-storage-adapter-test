@@ -2,6 +2,7 @@ using DorisStorageAdapter.Controllers.Attributes;
 using DorisStorageAdapter.Controllers.Authorization;
 using DorisStorageAdapter.Models;
 using DorisStorageAdapter.Services;
+using DorisStorageAdapter.Services.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
@@ -63,7 +64,7 @@ public class FileController(
         var result = await appService.StoreFile(
             datasetVersion, type, filePath, new(
                 Stream: Request.Body, 
-                Length: Request.Headers.ContentLength.Value, 
+                StreamLength: Request.Headers.ContentLength.Value, 
                 ContentType: Request.Headers.ContentType),
             cancellationToken);
 
@@ -120,9 +121,11 @@ public class FileController(
 
         return TypedResults.Ok();
     }
-    
+
     [HttpGet("file/{identifier}/{version}/{type}")]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
+    [SwaggerResponse(StatusCodes.Status206PartialContent, null, typeof(FileStreamResult), "*/*")]
+    [ProducesResponseType(typeof(void), StatusCodes.Status416RangeNotSatisfiable)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
@@ -134,6 +137,18 @@ public class FileController(
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
+        ByteRange? ParseByteRange()
+        {
+            var rangeHeader = Request.GetTypedHeaders().Range;
+            if (rangeHeader != null && rangeHeader.Ranges.Count == 1)
+            {
+                var rangeItem = rangeHeader.Ranges.First();
+                return new(rangeItem.From, rangeItem.To);
+            }
+
+            return null;
+        }
+
         var datasetVersion = new DatasetVersion(identifier, version);
         bool restrictToPubliclyAccessible = true;
 
@@ -152,17 +167,37 @@ public class FileController(
             restrictToPubliclyAccessible = false;
         }
 
+        ByteRange? byteRange = ParseByteRange();
+
         var fileData = await appService.GetFileData(
-            datasetVersion, type, filePath, restrictToPubliclyAccessible, cancellationToken);
+            datasetVersion,
+            type, 
+            filePath, 
+            byteRange, 
+            restrictToPubliclyAccessible, 
+            cancellationToken); 
 
         if (fileData == null)
         {
             return TypedResults.NotFound();
         }
 
-        Response.Headers.ContentLength = fileData.Length;
+        // Use a fake seekable stream here in order for TypedResults.Stream()
+        // to work as intended when using byte ranges.
+        // fileData.Stream as returned from appService.GetFileData() is already sliced
+        // according to the given byte range, but the internal logic in TypedResults.Stream()
+        // will try to seek according to the byte range. Using a FakeSeekableStream fixes
+        // that by making seeking a no-op.
+        fileData = fileData with 
+        { 
+            Stream = new FakeSeekableStream(fileData.Stream, fileData.TotalLength) 
+        };
 
-        return TypedResults.Stream(fileData.Stream, fileData.ContentType, filePath.Split('/').Last());
+        return TypedResults.Stream(
+            stream: fileData.Stream, 
+            contentType: fileData.ContentType, 
+            fileDownloadName: filePath.Split('/').Last(), 
+            enableRangeProcessing: true);
     }
 
     [HttpGet("file/{identifier}/{version}/zip")]

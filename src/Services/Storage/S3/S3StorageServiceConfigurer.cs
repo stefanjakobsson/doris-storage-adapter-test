@@ -26,9 +26,8 @@ internal sealed class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3S
 
                 return new AmazonS3Client(s3Config.AccessKey, s3Config.SecretKey, new AmazonS3Config
                 {
-                    // We disable retries since we do not support a real
-                    // seekable stream (to avoid buffering in memory),
-                    // see StreamWrapper.cs.
+                    // Disable retries to avoid seeking in the input stream
+                    // when uploading objects, see S3StorageService.StoreFile().
                     MaxErrorRetry = 0,
                     ServiceURL = s3Config.ServiceUrl,
                     ForcePathStyle = s3Config.ForcePathStyle

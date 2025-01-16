@@ -3,22 +3,20 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DorisStorageAdapter.Services.Storage.S3;
+namespace DorisStorageAdapter.Services;
 
 /// <summary>
-/// In order for AmazonS3Client to support multipart uploading
-/// without buffering each part in memory, it needs a stream that is seekable.
-/// The disadvantage of buffering is that upload part size directly influences
-/// memory usage, which limits the usable part size.
-///
-/// StreamWrapper is a faked seekable stream that can report Length and Position.
-/// We do not actually support seeking, but seeking is only used by AmazonS3Client
-/// when retrying, which we have disabled.
+/// A stream that wraps another stream to make it appear as though the underlying
+/// stream is seekable. Seeking only affects the Position property and does not
+/// actually seek in the underlying stream.
 /// </summary>
 /// <param name="underlyingStream">The underlying stream to wrap.</param>
-/// <param name="length">The underlying stream's length.</param>
-internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stream
+/// <param name="length">The length of the underlying stream.</param>
+internal class FakeSeekableStream(Stream underlyingStream, long length) : Stream
 {
+    public static Stream CreateSeekableStream(Stream underlyingStream, long length) =>
+        new FakeSeekableStream(underlyingStream, length);
+
     private readonly Stream underlyingStream = underlyingStream;
     private readonly long length = length;
     private long position;
@@ -32,7 +30,15 @@ internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stre
     public override long Position
     {
         get => position;
-        set => throw new NotSupportedException();
+        set
+        {
+            if (value < 0 || value > length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, 
+                    "Position must be between 0 and the length of the stream.");
+            }
+            position = value;
+        }
     }
 
     public override int ReadTimeout
@@ -79,10 +85,8 @@ internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stre
             await base.DisposeAsync().ConfigureAwait(false);
         }
     }
- 
-    public override void Flush() => underlyingStream.Flush();
 
-    public override Task FlushAsync(CancellationToken cancellation) => underlyingStream.FlushAsync(cancellation);
+    public override void Flush() => throw new NotSupportedException();
 
     public override int Read(Span<byte> buffer)
     {
@@ -100,22 +104,18 @@ internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stre
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {
+        if (buffer.IsEmpty || Position >= Length)
+        {
+            return 0;
+        }
+
         int bytesRead = await underlyingStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
         position += bytesRead;
         return bytesRead;
     }
 
-    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-    {
-#pragma warning disable IDE0079 // Remove unnecessary suppression
-#pragma warning disable CA1835 //  Prefer the memory-based overloads of ReadAsync/WriteAsync methods in stream-based classes
-        var bytesRead = await underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-#pragma warning restore CA1835
-#pragma warning restore IDE0079
-
-        position += bytesRead;
-        return bytesRead;
-    }
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        ReadAsync(buffer.AsMemory().Slice(offset, count), cancellationToken).AsTask();
 
     public override int ReadByte()
     {
@@ -129,7 +129,14 @@ internal sealed class StreamWrapper(Stream underlyingStream, long length) : Stre
         return result;
     }
 
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) =>
+         Position = origin switch
+         {
+             SeekOrigin.Begin => offset,
+             SeekOrigin.Current => Position + offset,
+             SeekOrigin.End => length + offset,
+             _ => throw new NotSupportedException()
+         };
 
     public override void SetLength(long value) => throw new NotSupportedException();
 

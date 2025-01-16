@@ -137,7 +137,7 @@ builder.Services
         options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
     })
     // This enables sending the bearer token as an URI query parameter.
-    // We only include this to enable downloading files via browser, which
+    // Needs to be enabled to support downloading files via <a href> in a browser, which
     // does not support setting HTTP headers.
     // The recommended way of setting the bearer token is via the Authorization header
     // when possible, and only use the URI query parameter when absolutely necessary.

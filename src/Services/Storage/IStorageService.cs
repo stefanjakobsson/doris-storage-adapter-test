@@ -10,7 +10,7 @@ public interface IStorageService
 
     Task DeleteFile(string filePath, CancellationToken cancellationToken);
 
-    Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken);
+    Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken);
 
     IAsyncEnumerable<StorageServiceFile> ListFiles(string path, CancellationToken cancellationToken);
 }

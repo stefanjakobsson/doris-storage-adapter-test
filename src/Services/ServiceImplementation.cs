@@ -65,7 +65,7 @@ public class ServiceImplementation(
     {
         async Task<(T, byte[] Checksum)?> LoadWithChecksum<T>(string filePath, Func<Stream, CancellationToken, Task<T>> func)
         {
-            var fileData = await storageService.GetFileData(filePath, cancellationToken);
+            var fileData = await storageService.GetFileData(filePath, null, cancellationToken);
 
             if (fileData == null)
             {
@@ -175,7 +175,7 @@ public class ServiceImplementation(
 
         if (bagInfo == null)
         {
-            // Do we need to throw an exception here?
+            // Throw exception here?
             return;
         }
 
@@ -287,7 +287,7 @@ public class ServiceImplementation(
             bytesRead = hashStream.BytesRead;
         }
 
-        // From this point on we do not want to cancel the operation,
+        // Do not cancel the operation from this point on,
         // since the file has been successfully stored.
 
         /*string? url = await Deduplicate(checksum);
@@ -357,7 +357,7 @@ public class ServiceImplementation(
     {
         await storageService.DeleteFile(fullFilePath, cancellationToken);
 
-        // From this point on we do not want to cancel the operation,
+        // Do not cancel the operation from this point on,
         // since the file has been successfully deleted.
 
         await RemoveItemFromPayloadManifest(datasetVersion, filePath, CancellationToken.None);
@@ -455,20 +455,18 @@ public class ServiceImplementation(
         await StoreManifest(datasetVersion, true, manifest, CancellationToken.None);
     }
 
-    public async Task<FileData?> GetFileData(
+    public async Task<PartialFileData?> GetFileData(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
+        ByteRange? byteRange,
         bool restrictToPubliclyAccessible,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(datasetVersion);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        // Should we add some kind of locking here?
-        // The requested file could potentially be added to fetch and removed from current version
-        // after we found it in fetch and try to load it from current version, which will return
-        // not found to the caller.
+        // Add some kind of locking here for read consistency?
 
         filePath = GetFilePathOrThrow(type, filePath);
 
@@ -495,6 +493,7 @@ public class ServiceImplementation(
         var fetch = await LoadFetch(datasetVersion, cancellationToken);
         var result = await storageService.GetFileData(
             GetActualFilePath(datasetVersion, fetch, filePath),
+            byteRange,
             cancellationToken);
 
         if (result != null && result.ContentType == null)
@@ -511,7 +510,7 @@ public class ServiceImplementation(
     {
         ArgumentNullException.ThrowIfNull(datasetVersion);
 
-        // Should we add some kind of locking here?
+        // Add some kind of locking here?
         // Checksums and fetch can potentially be changed while processing this request,
         // leading to returning faulty checksums and other problems.
 
@@ -590,7 +589,7 @@ public class ServiceImplementation(
             }
 
             string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestItem.FilePath);
-            var data = await storageService.GetFileData(actualFilePath, cancellationToken);
+            var data = await storageService.GetFileData(actualFilePath, null, cancellationToken);
 
             if (data != null)
             {
@@ -733,6 +732,7 @@ public class ServiceImplementation(
     {
         var data = await storageService.GetFileData(
             GetManifestFilePath(datasetVersion, payloadManifest),
+            null,
             cancellationToken);
 
         if (data == null)
@@ -752,6 +752,7 @@ public class ServiceImplementation(
     {
         var data = await storageService.GetFileData(
             GetFetchFilePath(datasetVersion),
+            null,
             cancellationToken);
 
         if (data == null)
@@ -769,6 +770,7 @@ public class ServiceImplementation(
     {
         var data = await storageService.GetFileData(
             GetBagInfoFilePath(datasetVersion),
+            null,
             cancellationToken);
 
         if (data == null)
@@ -927,7 +929,7 @@ public class ServiceImplementation(
 
     private async Task<bool> VersionHasBeenPublished(DatasetVersion datasetVersion, CancellationToken cancellationToken)
     {
-        var data = await storageService.GetFileData(GetBagItFilePath(datasetVersion), cancellationToken);
+        var data = await storageService.GetFileData(GetBagItFilePath(datasetVersion), null, cancellationToken);
 
         if (data == null)
         {

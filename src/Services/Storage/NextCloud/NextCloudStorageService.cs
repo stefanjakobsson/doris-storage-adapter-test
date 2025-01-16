@@ -94,7 +94,7 @@ internal sealed class NextCloudStorageService : IStorageService
         async Task<long> DoChunkedUpload()
         {
             var uri = new Uri(chunkedUploadBaseUri, "doris-storage-adapter-" + Guid.NewGuid().ToString() + '/');
-            // Add Destination header to all calls to ensure we use v2 of NextCloud's chunked upload API.
+            // Add Destination header to all calls to ensure the v2 version of NextCloud's chunked upload API is used.
             var destinationHeader = KeyValuePair.Create("Destination", fileUri.AbsoluteUri);
             long now;
 
@@ -106,7 +106,7 @@ internal sealed class NextCloudStorageService : IStorageService
                     Headers = [destinationHeader]
                 }));
 
-                long bytesLeft = data.Length;
+                long bytesLeft = data.StreamLength;
                 int chunk = 1;
 
                 do
@@ -164,7 +164,7 @@ internal sealed class NextCloudStorageService : IStorageService
         {
             await CreateDirectory(directoryUri, cancellationToken);
 
-            if (data.Length > configuration.ChunkedUploadThreshold)
+            if (data.StreamLength > configuration.ChunkedUploadThreshold)
             {
                 now = await DoChunkedUpload();
             }
@@ -221,11 +221,19 @@ internal sealed class NextCloudStorageService : IStorageService
         }
     }
 
-    public async Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
+    public async Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
-        var response = await webDavClient.GetFileResponse(GetWebDavFileUri(filePath), true, new()
+        IReadOnlyCollection<KeyValuePair<string, string>> headers = 
+            byteRange == null 
+                ? [] 
+                : [new(HttpRequestHeader.Range.ToString(), byteRange.ToHttpRangeValue())];
+
+        var uri = GetWebDavFileUri(filePath);
+
+        var response = await webDavClient.GetFileResponse(uri, true, new()
         {
-            CancellationToken = cancellationToken
+            CancellationToken = cancellationToken,
+            Headers = headers
         });
 
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -233,11 +241,52 @@ internal sealed class NextCloudStorageService : IStorageService
             return null;
         }
 
+        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable ||
+            // NextCloud returns 206 with an invalid Content-Range for requests with "Range: bytes=-0"
+            // when it should be returning 416. Explicitly check for that case here.
+            byteRange is { From: null, To: 0 })
+        {
+            // Return an empty stream to indicate that the
+            // requested range was not satisfiable.
+
+            // NextCloud does not respond with valid Content-Range header,
+            // resort to issuing a new request to get the length.
+
+            var propFindResponse = await webDavClient.Propfind(uri, new PropfindParameters
+            {
+                ApplyTo = ApplyTo.Propfind.ResourceOnly,
+                Namespaces = [new("d", "DAV:")],
+                CustomProperties = [XName.Get("getcontentlength", "DAV:")],
+                RequestType = PropfindRequestType.NamedProperties,
+                CancellationToken = cancellationToken
+            });
+
+            if (propFindResponse.StatusCode == (int)HttpStatusCode.NotFound ||
+                propFindResponse.Resources.Count == 0)
+            {
+                return null;
+            }
+
+            EnsureSuccessStatusCode(propFindResponse);
+
+            return new(
+                Stream: System.IO.Stream.Null,
+                StreamLength: 0,
+                TotalLength: propFindResponse.Resources.First().ContentLength!.Value,
+                ContentType: null);
+        }
+
         response.EnsureSuccessStatusCode();
+
+        long contentLength = response.Content.Headers.ContentLength!.Value;
 
         return new(
             Stream: await response.Content.ReadAsStreamAsync(cancellationToken),
-            Length: response.Content.Headers.ContentLength!.Value,
+            StreamLength: contentLength,
+            TotalLength:
+                response.StatusCode == HttpStatusCode.PartialContent
+                    ? response.Content.Headers.ContentRange?.Length.GetValueOrDefault() ?? 0
+                    : contentLength,
             ContentType: response.Content.Headers.ContentType?.MediaType);
     }
 

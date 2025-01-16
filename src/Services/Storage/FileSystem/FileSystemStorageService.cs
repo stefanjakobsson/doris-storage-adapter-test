@@ -60,9 +60,9 @@ internal sealed class FileSystemStorageService(
                 // synchronously on a background thread (as of 2024-09-11).
                 Options = FileOptions.Asynchronous, 
 
-                PreallocationSize = data.Length,
+                PreallocationSize = data.StreamLength,
 
-                // The value of Share does not really matter since we are writing to a
+                // The value of Share does not really matter since writing is done to a
                 // temporary file that will not be accessed by anyone else.
                 Share = FileShare.Read
             }))
@@ -74,7 +74,7 @@ internal sealed class FileSystemStorageService(
         }
         catch
         {
-            // Cancelled or failed, try to clean up.
+            // Cancelled or failed, try to clean up
 
             try
             {
@@ -103,7 +103,7 @@ internal sealed class FileSystemStorageService(
 #pragma warning disable CA1031 // Do not catch general exception types
         catch
         {
-            // Ignore errors here since file has been successfully stored
+            // Ignore errors here since file has been successfully stored and
             // returning the correct modified date is not crucial.
         }
 #pragma warning restore CA1031
@@ -143,7 +143,7 @@ internal sealed class FileSystemStorageService(
 #pragma warning restore CA1031
     }
 
-    public Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
+    public Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -153,12 +153,12 @@ internal sealed class FileSystemStorageService(
         // than letting the FileStream constructor throw FileNotFoundException.
         if (!File.Exists(filePath))
         {
-            return Task.FromResult<FileData?>(null);
+            return Task.FromResult<PartialFileData?>(null);
         }
         
         try
         {
-            var stream = new FileStream(filePath, new FileStreamOptions
+            Stream stream = new FileStream(filePath, new FileStreamOptions
             {
                 Access = FileAccess.Read,
                 Mode = FileMode.Open,
@@ -168,7 +168,7 @@ internal sealed class FileSystemStorageService(
                 // synchronously on a background thread (as of 2024-09-11).
                 Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
 
-                // On Linux we really only have to specify something other than FileShare.None to
+                // On Linux it is only really necessary to specify something other than FileShare.None to
                 // ensure that simultaneous calls to GetFileData for the same file succeeds.
                 // FileShare.None would result in an (advisory) exclusive file lock which would prevent
                 // multiple readers (unless DOTNET_SYSTEM_IO_DISABLEFILELOCKING is true).
@@ -182,14 +182,22 @@ internal sealed class FileSystemStorageService(
                 Share = FileShare.Read | FileShare.Write | FileShare.Delete
             });
 
-            return Task.FromResult<FileData?>(new(
+            long totalLength = stream.Length;
+
+            if (byteRange != null)
+            {
+                stream = StreamHelpers.CreateByteRangeStream(stream, byteRange);
+            }
+
+            return Task.FromResult<PartialFileData?>(new(
                 Stream: stream,
-                Length: stream.Length,
+                StreamLength: stream.Length,
+                TotalLength: totalLength,
                 ContentType: null));
         }
         catch (FileNotFoundException)
         {
-            return Task.FromResult<FileData?>(null);
+            return Task.FromResult<PartialFileData?>(null);
         }
     }
 
@@ -228,7 +236,7 @@ internal sealed class FileSystemStorageService(
 
         if (!directory.Exists)
         {
-            // Given path is not a directory, try with nearest parent directory.
+            // Given path is not a directory, try with nearest parent directory
             directory = new(path[..path.LastIndexOf(Path.DirectorySeparatorChar)]);
 
             if (!directory.Exists)
@@ -259,7 +267,7 @@ internal sealed class FileSystemStorageService(
 
         if (path.Split('/').Any(c => c.Any(invalidFileNameChars.Contains)))
         {
-            // This can only happen on Windows; Linux supports all characters except '/'.
+            // This can only happen on Windows; Linux supports all characters except '/'
             Throw();
         }
 

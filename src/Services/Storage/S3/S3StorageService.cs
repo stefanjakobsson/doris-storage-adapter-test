@@ -1,8 +1,11 @@
 ﻿using Amazon.S3;
+using Amazon.S3.Model;
 using Amazon.S3.Transfer;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,14 +36,25 @@ internal sealed class S3StorageService(
             BucketName = configuration.BucketName,
             Key = filePath,
 
-            // This is a workaround to make sure that TransferUtility does not synchronously read
-            // from data.Stream, which (for some reason) happens if the stream is empty. Trying to
-            // read synchrounously triggers an ASP.NET core error unless AllowSynchronousIO is set to true.
-            //
-            // If length is 0 we replace the input stream with Stream.Null which does not throw on synchronous reads.
-            InputStream = data.Length == 0 ? System.IO.Stream.Null : new StreamWrapper(data.Stream, data.Length),
+            InputStream = data.StreamLength == 0
+                // Using Stream.Null when data.StreamLength is 0 is a workaround to make sure
+                // that TransferUtility does not read synchronously from data.Stream, which
+                // (for some reason) happens if the stream is empty. Trying to read synchrounously
+                // triggers an ASP.NET core error unless AllowSynchronousIO is set to true.
+                ? System.IO.Stream.Null
 
-            PartSize = configuration.MultiPartUploadChunkSize,
+                /// In order for TransferUtility to support multipart uploading
+                /// without buffering each part in memory, InputStream must report Length
+                /// and be seekable. Buffering should be avoided since it means that
+                /// the value of configuration.MultiPartUploadChunkSize directly affects
+                /// memory usage.
+                /// 
+                /// To make data.Stream seem seekable it is wrapped in a FakeSeekableStream. 
+                /// Seeking is only actually used by TransferUtility when retrying a failed upload,
+                /// so retries are disabled in S3StorageServiceConfigurer to avoid seeking here.
+                : new FakeSeekableStream(data.Stream, data.StreamLength),
+           
+            PartSize = configuration.MultiPartUploadChunkSize
         };
 
         await utility.UploadAsync(request, cancellationToken);
@@ -49,7 +63,7 @@ internal sealed class S3StorageService(
             ContentType: null,
             DateCreated: null,
             // DateTime.UtcNow is an approximation.
-            // To get the actual LastModified we need to call GetObjectMetadataAsync,
+            // Must call GetObjectMetadataAsync to get the actual LastModified value,
             // which is arguably unnecessary overhead.
             DateModified: DateTime.UtcNow);
     }
@@ -64,27 +78,74 @@ internal sealed class S3StorageService(
         cancellationToken);
     }
 
-    public async Task<FileData?> GetFileData(string filePath, CancellationToken cancellationToken)
+    public async Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         try
         {
-            var response = await client.GetObjectAsync(new()
+            var request = new GetObjectRequest()
             {
                 BucketName = configuration.BucketName,
                 Key = filePath
-            }, 
-            cancellationToken);
+            };
+
+            if (byteRange != null)
+            {
+                request.ByteRange = new(byteRange.ToHttpRangeValue());
+            }
+
+            var response = await client.GetObjectAsync(request, cancellationToken);
 
             return new(
                 Stream: response.ResponseStream,
-                Length: response.ContentLength,
+                StreamLength: response.ContentLength,
+                TotalLength:
+                    response.HttpStatusCode == HttpStatusCode.PartialContent
+                        ? ContentRangeHeaderValue.TryParse(response.ContentRange, out var contentRange) 
+                            ? contentRange.Length.GetValueOrDefault() 
+                            : 0
+                        : response.ContentLength,
                 ContentType: null);
         }
         catch (AmazonS3Exception e)
         {
-            if (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+            if (e.StatusCode == HttpStatusCode.NotFound)
             {
                 return null;
+            }
+
+            if (e.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+            {
+                // For some (stupid) reason, the respone HTTP headers can not be accessed here,
+                // which means that the Content-Range header can not be used to get the
+                // TotalLength value. Resort to issuing a new request to S3 to get the length.
+
+                GetObjectMetadataResponse response;
+                try
+                {
+                    response = await client.GetObjectMetadataAsync(new()
+                    {
+                        BucketName = configuration.BucketName,
+                        Key = filePath
+                    },
+                    cancellationToken);
+                }
+                catch (AmazonS3Exception e2)
+                {
+                    if (e2.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        return null;
+                    }
+
+                    throw;
+                }
+
+                // Return an empty stream to indicate that the
+                // requested range was not satisfiable.
+                return new(
+                    Stream: System.IO.Stream.Null,
+                    StreamLength: 0,
+                    TotalLength: response.ContentLength,
+                    ContentType: null); 
             }
 
             throw;
