@@ -143,6 +143,21 @@ internal sealed class FileSystemStorageService(
 #pragma warning restore CA1031
     }
 
+    public Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        filePath = GetFullPathOrThrow(filePath);
+        var file = new FileInfo(filePath);
+
+        if (file.Exists)
+        {
+            return Task.FromResult<StorageServiceFile?>(ToStorageServiceFile(file));
+        }
+
+        return Task.FromResult<StorageServiceFile?>(null);
+    }
+
     public Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -249,14 +264,7 @@ internal sealed class FileSystemStorageService(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var relativePath = Path.GetRelativePath(basePath, file.FullName);
-
-            yield return new(
-              ContentType: null,
-              DateCreated: null,
-              DateModified: file.LastWriteTimeUtc,
-              Path: NormalizePath(relativePath),
-              Length: file.Length);
+            yield return ToStorageServiceFile(file);
         }
     }
 #pragma warning restore CS1998
@@ -290,6 +298,14 @@ internal sealed class FileSystemStorageService(
 
         return path;
     }
+
+    private StorageServiceFile ToStorageServiceFile(FileInfo file) =>
+        new(
+            ContentType: null,
+            DateCreated: null,
+            DateModified: file.LastWriteTimeUtc,
+            Path: NormalizePath(Path.GetRelativePath(basePath, file.FullName)),
+            Length: file.Length);
 
     /// <summary>
     /// Returns the root directory of the given directory path

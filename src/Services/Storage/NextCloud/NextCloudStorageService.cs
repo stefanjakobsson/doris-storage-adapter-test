@@ -25,6 +25,11 @@ internal sealed class NextCloudStorageService : IStorageService
     private readonly Uri chunkedUploadBaseUri;
     private readonly Uri tmpFileBaseUri;
 
+    private const string davNamespaceName = "DAV:";
+    private static readonly XName getLastModifiedProperty = XName.Get("getlastmodified", davNamespaceName);
+    private static readonly XName getContentLengthProperty = XName.Get("getcontentlength", davNamespaceName);
+    private static readonly XName resourceTypeProperty = XName.Get("resourcetype", davNamespaceName);
+
     public NextCloudStorageService(
         IWebDavClient webDavClient,
         IOptions<NextCloudStorageServiceConfiguration> configuration,
@@ -221,11 +226,40 @@ internal sealed class NextCloudStorageService : IStorageService
         }
     }
 
+    public async Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    {
+        var uri = GetWebDavFileUri(filePath);
+        var response = await DoPropfind(
+            uri, 
+            ApplyTo.Propfind.ResourceOnly, 
+            [
+                getLastModifiedProperty,
+                getContentLengthProperty
+            ], 
+            cancellationToken);
+
+        if (NotFound(response) || response.Resources.Count == 0)
+        {
+            return null;
+        }
+
+        EnsureSuccessStatusCode(response);
+
+        var resource = response.Resources.First();
+
+        return new(
+            ContentType: null,
+            DateCreated: null,
+            DateModified: resource.LastModifiedDate?.ToUniversalTime(),
+            Path: filePath,
+            Length: resource.ContentLength.GetValueOrDefault());
+    }
+
     public async Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
-        IReadOnlyCollection<KeyValuePair<string, string>> headers = 
-            byteRange == null 
-                ? [] 
+        IReadOnlyCollection<KeyValuePair<string, string>> headers =
+            byteRange == null
+                ? []
                 : [new(HttpRequestHeader.Range.ToString(), byteRange.ToHttpRangeValue())];
 
         var uri = GetWebDavFileUri(filePath);
@@ -252,17 +286,13 @@ internal sealed class NextCloudStorageService : IStorageService
             // NextCloud does not respond with valid Content-Range header,
             // resort to issuing a new request to get the length.
 
-            var propFindResponse = await webDavClient.Propfind(uri, new PropfindParameters
-            {
-                ApplyTo = ApplyTo.Propfind.ResourceOnly,
-                Namespaces = [new("d", "DAV:")],
-                CustomProperties = [XName.Get("getcontentlength", "DAV:")],
-                RequestType = PropfindRequestType.NamedProperties,
-                CancellationToken = cancellationToken
-            });
+            var propFindResponse = await DoPropfind(
+                uri,
+                ApplyTo.Propfind.ResourceOnly,
+                [getContentLengthProperty],
+                cancellationToken);
 
-            if (propFindResponse.StatusCode == (int)HttpStatusCode.NotFound ||
-                propFindResponse.Resources.Count == 0)
+            if (NotFound(propFindResponse) || propFindResponse.Resources.Count == 0)
             {
                 return null;
             }
@@ -294,22 +324,19 @@ internal sealed class NextCloudStorageService : IStorageService
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        Task<PropfindResponse> DoPropFind(Uri uri, CancellationToken cancellationToken) =>
-            webDavClient.Propfind(uri, new PropfindParameters
-            {
-                ApplyTo = ApplyTo.Propfind.ResourceAndAncestors,
-                Namespaces = [new("d", "DAV:")],
-                CustomProperties = [
-                    XName.Get("getlastmodified", "DAV:"),
-                    XName.Get("getcontentlength", "DAV:"),
-                    XName.Get("resourcetype", "DAV:")
+        Task<PropfindResponse> DoPropfind(Uri uri, CancellationToken cancellationToken) =>
+            this.DoPropfind(
+                uri,
+                ApplyTo.Propfind.ResourceAndAncestors,
+                [
+                    getLastModifiedProperty,
+                    getContentLengthProperty,
+                    resourceTypeProperty
                 ],
-                RequestType = PropfindRequestType.NamedProperties,
-                CancellationToken = cancellationToken
-            });
+                cancellationToken);
 
         var baseUri = GetWebDavFileUri(path);
-        var response = await DoPropFind(baseUri, cancellationToken);
+        var response = await DoPropfind(baseUri, cancellationToken);
 
         if (NotFound(response))
         {
@@ -322,7 +349,7 @@ internal sealed class NextCloudStorageService : IStorageService
             // Try with parent directory.
 
             baseUri = GetParentUri(baseUri);
-            response = await DoPropFind(baseUri, cancellationToken);
+            response = await DoPropfind(baseUri, cancellationToken);
 
             if (NotFound(response))
             {
@@ -369,6 +396,20 @@ internal sealed class NextCloudStorageService : IStorageService
 
         return new(absoluteUri[..(absoluteUri.LastIndexOf('/') + 1)]);
     }
+
+    private Task<PropfindResponse> DoPropfind(
+        Uri uri,
+        ApplyTo.Propfind applyTo,
+        IReadOnlyCollection<XName> customProperties,
+        CancellationToken cancellationToken) =>
+        webDavClient.Propfind(uri, new PropfindParameters
+        {
+            ApplyTo = applyTo,
+            Namespaces = [new("d", davNamespaceName)],
+            CustomProperties = customProperties,
+            RequestType = PropfindRequestType.NamedProperties,
+            CancellationToken = cancellationToken
+        });
 
     private async Task<bool> DirectoryExists(Uri uri, CancellationToken cancellationToken)
     {

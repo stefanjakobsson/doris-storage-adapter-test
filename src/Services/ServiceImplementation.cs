@@ -459,6 +459,7 @@ public class ServiceImplementation(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
+        bool isHeadRequest,
         ByteRange? byteRange,
         bool restrictToPubliclyAccessible,
         CancellationToken cancellationToken)
@@ -491,10 +492,26 @@ public class ServiceImplementation(
         }
 
         var fetch = await LoadFetch(datasetVersion, cancellationToken);
-        var result = await storageService.GetFileData(
-            GetActualFilePath(datasetVersion, fetch, filePath),
-            byteRange,
-            cancellationToken);
+        filePath = GetActualFilePath(datasetVersion, fetch, filePath);
+
+        PartialFileData? result = null;
+        if (isHeadRequest)
+        {
+            var metadata = await storageService.GetFileMetadata(filePath, cancellationToken);
+
+            if (metadata != null)
+            {
+                result = new(
+                    Stream: Stream.Null, 
+                    StreamLength: 0,
+                    TotalLength: metadata.Length, 
+                    ContentType: metadata.ContentType);
+            }
+        }
+        else
+        {
+            result = await storageService.GetFileData(filePath, byteRange, cancellationToken);
+        }
 
         if (result != null && result.ContentType == null)
         {
@@ -927,20 +944,8 @@ public class ServiceImplementation(
     private static FileData CreateFileDataFromByteArray(byte[] data) =>
         new(new MemoryStream(data), data.LongLength, "text/plain");
 
-    private async Task<bool> VersionHasBeenPublished(DatasetVersion datasetVersion, CancellationToken cancellationToken)
-    {
-        var data = await storageService.GetFileData(GetBagItFilePath(datasetVersion), null, cancellationToken);
-
-        if (data == null)
-        {
-            return false;
-        }
-
-        using (data.Stream)
-        {
-            return true;
-        }
-    }
+    private async Task<bool> VersionHasBeenPublished(DatasetVersion datasetVersion, CancellationToken cancellationToken) =>
+        await storageService.GetFileMetadata(GetBagItFilePath(datasetVersion), cancellationToken) != null;
 
     private async Task ThrowIfHasBeenPublished(DatasetVersion datasetVersion, CancellationToken cancellationToken)
     {

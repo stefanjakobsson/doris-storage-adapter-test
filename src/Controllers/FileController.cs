@@ -122,6 +122,7 @@ public class FileController(
         return TypedResults.Ok();
     }
 
+    [HttpHead("file/{identifier}/{version}/{type}")]
     [HttpGet("file/{identifier}/{version}/{type}")]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
     [SwaggerResponse(StatusCodes.Status206PartialContent, null, typeof(FileStreamResult), "*/*")]
@@ -167,15 +168,14 @@ public class FileController(
             restrictToPubliclyAccessible = false;
         }
 
-        ByteRange? byteRange = ParseByteRange();
-
         var fileData = await appService.GetFileData(
-            datasetVersion,
-            type, 
-            filePath, 
-            byteRange, 
-            restrictToPubliclyAccessible, 
-            cancellationToken); 
+            datasetVersion: datasetVersion,
+            type: type,
+            filePath: filePath,
+            isHeadRequest: Request.Method == HttpMethods.Head,
+            byteRange: ParseByteRange(),
+            restrictToPubliclyAccessible: restrictToPubliclyAccessible,
+            cancellationToken: cancellationToken); 
 
         if (fileData == null)
         {
