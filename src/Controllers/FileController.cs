@@ -62,11 +62,14 @@ public class FileController(
         }
 
         var result = await appService.StoreFile(
-            datasetVersion, type, filePath, new(
+            datasetVersion: datasetVersion, 
+            type: type, 
+            filePath: filePath, 
+            data: new(
                 Stream: Request.Body, 
-                StreamLength: Request.Headers.ContentLength.Value, 
-                ContentType: Request.Headers.ContentType),
-            cancellationToken);
+                Length: Request.Headers.ContentLength.Value), 
+            contentType: Request.Headers.ContentType,
+            cancellationToken: cancellationToken);
 
         return TypedResults.Ok(result);
     }
@@ -184,17 +187,19 @@ public class FileController(
 
         // Use a fake seekable stream here in order for TypedResults.Stream()
         // to work as intended when using byte ranges.
-        // fileData.Stream as returned from appService.GetFileData() is already sliced
+        // fileData.Data.Stream as returned from appService.GetFileData() is already sliced
         // according to the given byte range, but the internal logic in TypedResults.Stream()
         // will try to seek according to the byte range. Using a FakeSeekableStream fixes
         // that by making seeking a no-op.
-        fileData = fileData with 
-        { 
-            Stream = new FakeSeekableStream(fileData.Stream, fileData.TotalLength) 
+        fileData = fileData with
+        {
+            Data = new(
+               Stream: new FakeSeekableStream(fileData.Data.Stream, fileData.Length),
+               Length: fileData.Data.Length)
         };
 
         return TypedResults.Stream(
-            stream: fileData.Stream, 
+            stream: fileData.Data.Stream, 
             contentType: fileData.ContentType, 
             fileDownloadName: filePath.Split('/').Last(), 
             enableRangeProcessing: true);

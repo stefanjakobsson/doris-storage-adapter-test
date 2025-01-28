@@ -12,7 +12,7 @@ namespace DorisStorageAdapter.Services;
 /// </summary>
 /// <param name="underlyingStream">The underlying stream to wrap.</param>
 /// <param name="length">The length of the underlying stream.</param>
-internal class FakeSeekableStream(Stream underlyingStream, long length) : Stream
+internal sealed class FakeSeekableStream(Stream underlyingStream, long length) : Stream
 {
     public static Stream CreateSeekableStream(Stream underlyingStream, long length) =>
         new FakeSeekableStream(underlyingStream, length);

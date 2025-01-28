@@ -50,7 +50,11 @@ internal sealed class NextCloudStorageService : IStorageService
         chunkedUploadBaseUri = GetUri(this.configuration.BaseUrl, $"remote.php/dav/uploads/{this.configuration.User}/");
     }
 
-    public async Task<StorageServiceFileBase> StoreFile(string filePath, FileData data, CancellationToken cancellationToken)
+    public async Task<BaseFileMetadata> StoreFile(
+        string filePath, 
+        StreamWithLength data, 
+        string? contentType, 
+        CancellationToken cancellationToken)
     {
         long GetNow() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -111,7 +115,7 @@ internal sealed class NextCloudStorageService : IStorageService
                     Headers = [destinationHeader]
                 }));
 
-                long bytesLeft = data.StreamLength;
+                long bytesLeft = data.Stream.Length;
                 int chunk = 1;
 
                 do
@@ -169,7 +173,7 @@ internal sealed class NextCloudStorageService : IStorageService
         {
             await CreateDirectory(directoryUri, cancellationToken);
 
-            if (data.StreamLength > configuration.ChunkedUploadThreshold)
+            if (data.Stream.Length > configuration.ChunkedUploadThreshold)
             {
                 now = await DoChunkedUpload();
             }
@@ -226,7 +230,7 @@ internal sealed class NextCloudStorageService : IStorageService
         }
     }
 
-    public async Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    public async Task<FileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
     {
         var uri = GetWebDavFileUri(filePath);
         var response = await DoPropfind(
@@ -255,7 +259,7 @@ internal sealed class NextCloudStorageService : IStorageService
             Length: resource.ContentLength.GetValueOrDefault());
     }
 
-    public async Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
+    public async Task<FileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         IReadOnlyCollection<KeyValuePair<string, string>> headers =
             byteRange == null
@@ -300,9 +304,8 @@ internal sealed class NextCloudStorageService : IStorageService
             EnsureSuccessStatusCode(propFindResponse);
 
             return new(
-                Stream: System.IO.Stream.Null,
-                StreamLength: 0,
-                TotalLength: propFindResponse.Resources.First().ContentLength!.Value,
+                Data: new(Stream: System.IO.Stream.Null, Length: 0),
+                Length: propFindResponse.Resources.First().ContentLength!.Value,
                 ContentType: null);
         }
 
@@ -311,16 +314,17 @@ internal sealed class NextCloudStorageService : IStorageService
         long contentLength = response.Content.Headers.ContentLength!.Value;
 
         return new(
-            Stream: await response.Content.ReadAsStreamAsync(cancellationToken),
-            StreamLength: contentLength,
-            TotalLength:
+            Data: new(
+                Stream: await response.Content.ReadAsStreamAsync(cancellationToken), 
+                Length: contentLength),
+            Length:
                 response.StatusCode == HttpStatusCode.PartialContent
                     ? response.Content.Headers.ContentRange?.Length.GetValueOrDefault() ?? 0
                     : contentLength,
             ContentType: response.Content.Headers.ContentType?.MediaType);
     }
 
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+    public async IAsyncEnumerable<FileMetadata> ListFiles(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {

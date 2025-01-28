@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -11,16 +10,19 @@ internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorage
 {
     private readonly InMemoryStorage storage = storage;
 
-    public async Task<StorageServiceFileBase> StoreFile(
+    public async Task<BaseFileMetadata> StoreFile(
         string filePath, 
-        FileData data,
+        StreamWithLength data,
+        string? contentType,
         CancellationToken cancellationToken)
     {
         using var memoryStream = new MemoryStream();
         await data.Stream.CopyToAsync(memoryStream, cancellationToken);
         var byteArray = memoryStream.ToArray();
 
-        return storage.AddOrUpdate(filePath, byteArray, data.ContentType).Metadata;
+        return storage
+            .AddOrUpdate(filePath, byteArray, contentType)
+            .Metadata;
     }
 
     public Task DeleteFile(string filePath, CancellationToken cancellationToken)
@@ -31,19 +33,19 @@ internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorage
         return Task.CompletedTask;
     }
 
-    public Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    public Task<FileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (storage.TryGet(filePath, out var file))
         {
-            return Task.FromResult<StorageServiceFile?>(file.Metadata);
+            return Task.FromResult<FileMetadata?>(file.Metadata);
         }
 
-        return Task.FromResult<StorageServiceFile?>(null);
+        return Task.FromResult<FileMetadata?>(null);
     }
 
-    public Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
+    public Task<FileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -56,18 +58,17 @@ internal sealed class InMemoryStorageService(InMemoryStorage storage) : IStorage
                 stream = StreamHelpers.CreateByteRangeStream(stream, byteRange);
             }
 
-            return Task.FromResult<PartialFileData?>(new(
-                Stream: stream, 
-                StreamLength: stream.Length,
-                TotalLength: file.Data.LongLength,
+            return Task.FromResult<FileData?>(new(
+                Data: new(Stream: stream, Length: stream.Length),
+                Length: file.Data.LongLength,
                 ContentType: file.Metadata.ContentType));
         }
 
-        return Task.FromResult<PartialFileData?>(null);
+        return Task.FromResult<FileData?>(null);
     }
 
 #pragma warning disable CS1998 // This async method lacks 'await'
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+    public async IAsyncEnumerable<FileMetadata> ListFiles(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {

@@ -1,8 +1,6 @@
-﻿using System.IO;
-
-namespace DorisStorageAdapter.Services.Storage;
+﻿namespace DorisStorageAdapter.Services.Storage;
 
 public record FileData(
-    Stream Stream,
-    long StreamLength,
-    string? ContentType);
+    string? ContentType,
+    StreamWithLength Data,
+    long Length);

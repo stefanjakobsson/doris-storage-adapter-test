@@ -2,10 +2,10 @@
 
 namespace DorisStorageAdapter.Services.Storage;
 
-public record StorageServiceFile(
+public record FileMetadata(
     string? ContentType,
     DateTime? DateCreated,
     DateTime? DateModified,
     string Path,
     long Length
-) : StorageServiceFileBase(ContentType, DateCreated, DateModified);
+) : BaseFileMetadata(ContentType, DateCreated, DateModified);

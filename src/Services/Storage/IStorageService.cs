@@ -6,13 +6,13 @@ namespace DorisStorageAdapter.Services.Storage;
 
 public interface IStorageService
 {
-    Task<StorageServiceFileBase> StoreFile(string filePath, FileData data, CancellationToken cancellationToken);
+    Task<BaseFileMetadata> StoreFile(string filePath, StreamWithLength data, string? contentType, CancellationToken cancellationToken);
 
     Task DeleteFile(string filePath, CancellationToken cancellationToken);
 
-    Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken);
+    Task<FileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken);
 
-    Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken);
+    Task<FileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken);
 
-    IAsyncEnumerable<StorageServiceFile> ListFiles(string path, CancellationToken cancellationToken);
+    IAsyncEnumerable<FileMetadata> ListFiles(string path, CancellationToken cancellationToken);
 }

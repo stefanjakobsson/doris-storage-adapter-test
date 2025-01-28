@@ -19,9 +19,10 @@ internal sealed class S3StorageService(
     private readonly IAmazonS3 client = client;
     private readonly S3StorageServiceConfiguration configuration = configuration.Value;
 
-    public async Task<StorageServiceFileBase> StoreFile(
+    public async Task<BaseFileMetadata> StoreFile(
         string filePath, 
-        FileData data,
+        StreamWithLength data,
+        string? contentType,
         CancellationToken cancellationToken)
     {
         using var utility = new TransferUtility(client, new()
@@ -36,8 +37,8 @@ internal sealed class S3StorageService(
             BucketName = configuration.BucketName,
             Key = filePath,
 
-            InputStream = data.StreamLength == 0
-                // Using Stream.Null when data.StreamLength is 0 is a workaround to make sure
+            InputStream = data.Length == 0
+                // Using Stream.Null when data.Length is 0 is a workaround to make sure
                 // that TransferUtility does not read synchronously from data.Stream, which
                 // (for some reason) happens if the stream is empty. Trying to read synchrounously
                 // triggers an ASP.NET core error unless AllowSynchronousIO is set to true.
@@ -52,7 +53,7 @@ internal sealed class S3StorageService(
                 /// To make data.Stream seem seekable it is wrapped in a FakeSeekableStream. 
                 /// Seeking is only actually used by TransferUtility when retrying a failed upload,
                 /// so retries are disabled in S3StorageServiceConfigurer to avoid seeking here.
-                : new FakeSeekableStream(data.Stream, data.StreamLength),
+                : new FakeSeekableStream(data.Stream, data.Length),
            
             PartSize = configuration.MultiPartUploadChunkSize
         };
@@ -78,7 +79,7 @@ internal sealed class S3StorageService(
         cancellationToken);
     }
 
-    public async Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    public async Task<FileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
     {
         try
         {
@@ -107,7 +108,7 @@ internal sealed class S3StorageService(
         }
     }
 
-    public async Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
+    public async Task<FileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         try
         {
@@ -125,9 +126,10 @@ internal sealed class S3StorageService(
             var response = await client.GetObjectAsync(request, cancellationToken);
 
             return new(
-                Stream: response.ResponseStream,
-                StreamLength: response.ContentLength,
-                TotalLength:
+                Data: new(
+                    Stream: response.ResponseStream, 
+                    Length: response.ContentLength),           
+                Length:
                     response.HttpStatusCode == HttpStatusCode.PartialContent
                         ? ContentRangeHeaderValue.TryParse(response.ContentRange, out var contentRange) 
                             ? contentRange.Length.GetValueOrDefault() 
@@ -171,9 +173,8 @@ internal sealed class S3StorageService(
                 // Return an empty stream to indicate that the
                 // requested range was not satisfiable.
                 return new(
-                    Stream: System.IO.Stream.Null,
-                    StreamLength: 0,
-                    TotalLength: response.ContentLength,
+                    Data: new(Stream: System.IO.Stream.Null, Length: 0),
+                    Length: response.ContentLength,
                     ContentType: null); 
             }
 
@@ -181,7 +182,7 @@ internal sealed class S3StorageService(
         }
     }
 
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+    public async IAsyncEnumerable<FileMetadata> ListFiles(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {

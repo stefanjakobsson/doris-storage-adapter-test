@@ -36,9 +36,10 @@ internal sealed class FileSystemStorageService(
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
-    public async Task<StorageServiceFileBase> StoreFile(
+    public async Task<BaseFileMetadata> StoreFile(
         string filePath,
-        FileData data,
+        StreamWithLength data,
+        string? contentType,
         CancellationToken cancellationToken)
     {
         filePath = GetFullPathOrThrow(filePath);
@@ -60,7 +61,7 @@ internal sealed class FileSystemStorageService(
                 // synchronously on a background thread (as of 2024-09-11).
                 Options = FileOptions.Asynchronous, 
 
-                PreallocationSize = data.StreamLength,
+                PreallocationSize = data.Length,
 
                 // The value of Share does not really matter since writing is done to a
                 // temporary file that will not be accessed by anyone else.
@@ -143,7 +144,7 @@ internal sealed class FileSystemStorageService(
 #pragma warning restore CA1031
     }
 
-    public Task<StorageServiceFile?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    public Task<FileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -152,13 +153,13 @@ internal sealed class FileSystemStorageService(
 
         if (file.Exists)
         {
-            return Task.FromResult<StorageServiceFile?>(ToStorageServiceFile(file));
+            return Task.FromResult<FileMetadata?>(ToStorageServiceFile(file));
         }
 
-        return Task.FromResult<StorageServiceFile?>(null);
+        return Task.FromResult<FileMetadata?>(null);
     }
 
-    public Task<PartialFileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
+    public Task<FileData?> GetFileData(string filePath, ByteRange? byteRange, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -168,7 +169,7 @@ internal sealed class FileSystemStorageService(
         // than letting the FileStream constructor throw FileNotFoundException.
         if (!File.Exists(filePath))
         {
-            return Task.FromResult<PartialFileData?>(null);
+            return Task.FromResult<FileData?>(null);
         }
         
         try
@@ -197,27 +198,27 @@ internal sealed class FileSystemStorageService(
                 Share = FileShare.Read | FileShare.Write | FileShare.Delete
             });
 
-            long totalLength = stream.Length;
+            long length = stream.Length;
 
             if (byteRange != null)
             {
                 stream = StreamHelpers.CreateByteRangeStream(stream, byteRange);
             }
 
-            return Task.FromResult<PartialFileData?>(new(
-                Stream: stream,
-                StreamLength: stream.Length,
-                TotalLength: totalLength,
-                ContentType: null));
+            return Task.FromResult<FileData?>(new(
+                Data: new(Stream: stream, Length: stream.Length),
+                ContentType: null,
+                Length: length
+            ));
         }
         catch (FileNotFoundException)
         {
-            return Task.FromResult<PartialFileData?>(null);
+            return Task.FromResult<FileData?>(null);
         }
     }
 
 #pragma warning disable CS1998 // This async method lacks 'await'
-    public async IAsyncEnumerable<StorageServiceFile> ListFiles(
+    public async IAsyncEnumerable<FileMetadata> ListFiles(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -299,7 +300,7 @@ internal sealed class FileSystemStorageService(
         return path;
     }
 
-    private StorageServiceFile ToStorageServiceFile(FileInfo file) =>
+    private FileMetadata ToStorageServiceFile(FileInfo file) =>
         new(
             ContentType: null,
             DateCreated: null,

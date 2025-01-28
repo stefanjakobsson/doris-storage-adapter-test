@@ -36,6 +36,8 @@ public class ServiceImplementation(
     private const string bagItFileName = "bagit.txt";
     private const string bagInfoFileName = "bag-info.txt";
 
+    private const string textContentType = "text/plain";
+
     public async Task PublishDatasetVersion(
         DatasetVersion datasetVersion,
         AccessRight accessRight,
@@ -72,7 +74,7 @@ public class ServiceImplementation(
                 return null;
             }
 
-            using var hashStream = new CountedHashStream(fileData.Stream);
+            using var hashStream = new CountedHashStream(fileData.Data.Stream);
 
             return (await func(hashStream, cancellationToken), hashStream.GetHash());
         }
@@ -140,7 +142,8 @@ public class ServiceImplementation(
         await StoreBagInfo(datasetVersion, bagInfoContents, CancellationToken.None);
         await StoreFileAndDispose(
             GetBagItFilePath(datasetVersion),
-            CreateFileDataFromByteArray(bagItContents),
+            CreateStreamWithLengthFromByteArray(bagItContents),
+            textContentType,
             CancellationToken.None);
     }
 
@@ -194,7 +197,8 @@ public class ServiceImplementation(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
-        FileData data,
+        StreamWithLength data,
+        string? contentType,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(datasetVersion);
@@ -217,6 +221,7 @@ public class ServiceImplementation(
                     filePath,
                     fullFilePath,
                     data,
+                    contentType,
                     cancellationToken);
             },
             cancellationToken);
@@ -236,7 +241,8 @@ public class ServiceImplementation(
         DatasetVersion datasetVersion,
         string filePath,
         string fullFilePath,
-        FileData data,
+        StreamWithLength data,
+        string? contentType,
         CancellationToken cancellationToken)
     {
         /*async Task<string?> Deduplicate(byte[] checksum)
@@ -272,7 +278,7 @@ public class ServiceImplementation(
                 UrlEncodePath(itemsWithEqualChecksum.First().FilePath);
         }*/
 
-        StorageServiceFileBase result;
+        BaseFileMetadata result;
         byte[] checksum;
         long bytesRead;
 
@@ -281,6 +287,7 @@ public class ServiceImplementation(
             result = await storageService.StoreFile(
                 fullFilePath,
                 data with { Stream = hashStream },
+                contentType,
                 cancellationToken);
 
             checksum = hashStream.GetHash();
@@ -455,7 +462,7 @@ public class ServiceImplementation(
         await StoreManifest(datasetVersion, true, manifest, CancellationToken.None);
     }
 
-    public async Task<PartialFileData?> GetFileData(
+    public async Task<FileData?> GetFileData(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -494,7 +501,7 @@ public class ServiceImplementation(
         var fetch = await LoadFetch(datasetVersion, cancellationToken);
         filePath = GetActualFilePath(datasetVersion, fetch, filePath);
 
-        PartialFileData? result = null;
+        FileData? result = null;
         if (isHeadRequest)
         {
             var metadata = await storageService.GetFileMetadata(filePath, cancellationToken);
@@ -502,9 +509,8 @@ public class ServiceImplementation(
             if (metadata != null)
             {
                 result = new(
-                    Stream: Stream.Null, 
-                    StreamLength: 0,
-                    TotalLength: metadata.Length, 
+                    Data: new(Stream: Stream.Null, Length: 0), 
+                    Length: metadata.Length, 
                     ContentType: metadata.ContentType);
             }
         }
@@ -538,10 +544,10 @@ public class ServiceImplementation(
             payloadManifest.TryGetItem(filePath, out var value) ? value.Checksum : null;
 
         string datasetPath = GetDatasetPath(datasetVersion);
-        var result = new List<StorageServiceFile>();
+        var result = new List<FileMetadata>();
 
         string previousPayloadPath = "";
-        Dictionary<string, StorageServiceFile> dict = new(StringComparer.Ordinal);
+        Dictionary<string, FileMetadata> dict = new(StringComparer.Ordinal);
         foreach (var item in fetch.Items.OrderBy(i => i.Url, StringComparer.Ordinal))
         {
             string path = datasetPath + DecodeUrlEncodedPath(item.Url[3..]);
@@ -606,14 +612,14 @@ public class ServiceImplementation(
             }
 
             string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestItem.FilePath);
-            var data = await storageService.GetFileData(actualFilePath, null, cancellationToken);
+            var fileData = await storageService.GetFileData(actualFilePath, null, cancellationToken);
 
-            if (data != null)
+            if (fileData != null)
             {
                 using var entryStream = CreateZipEntryStream(zipArchive, versionPath + '/' + zipFilePath);
-                using (data.Stream)
+                using (fileData.Data.Stream)
                 {
-                    await data.Stream.CopyToAsync(entryStream, cancellationToken);
+                    await fileData.Data.Stream.CopyToAsync(entryStream, cancellationToken);
                 }
 
                 zipManifest.AddOrUpdateItem(new(zipFilePath, manifestItem.Checksum));
@@ -722,7 +728,7 @@ public class ServiceImplementation(
         throw new ArgumentException("Not a valid payload path.", nameof(path));
     }
 
-    private Models.File ToModelFile(DatasetVersion datasetVersion, StorageServiceFile file, byte[]? sha256)
+    private Models.File ToModelFile(DatasetVersion datasetVersion, FileMetadata file, byte[]? sha256)
     {
         var type = GetFileType(file.Path);
         string name = file.Path[GetPayloadPath(type).Length..];
@@ -747,19 +753,19 @@ public class ServiceImplementation(
         bool payloadManifest,
         CancellationToken cancellationToken)
     {
-        var data = await storageService.GetFileData(
+        var fileData = await storageService.GetFileData(
             GetManifestFilePath(datasetVersion, payloadManifest),
             null,
             cancellationToken);
 
-        if (data == null)
+        if (fileData == null)
         {
             return new();
         }
 
-        using (data.Stream)
+        using (fileData.Data.Stream)
         {
-            return await BagItManifest.Parse(data.Stream, cancellationToken);
+            return await BagItManifest.Parse(fileData.Data.Stream, cancellationToken);
         }
     }
 
@@ -767,45 +773,49 @@ public class ServiceImplementation(
         DatasetVersion datasetVersion,
         CancellationToken cancellationToken)
     {
-        var data = await storageService.GetFileData(
+        var fileData = await storageService.GetFileData(
             GetFetchFilePath(datasetVersion),
             null,
             cancellationToken);
 
-        if (data == null)
+        if (fileData == null)
         {
             return new();
         }
 
-        using (data.Stream)
+        using (fileData.Data.Stream)
         {
-            return await BagItFetch.Parse(data.Stream, cancellationToken);
+            return await BagItFetch.Parse(fileData.Data.Stream, cancellationToken);
         }
     }
 
     private async Task<BagItInfo?> LoadBagInfo(DatasetVersion datasetVersion, CancellationToken cancellationToken)
     {
-        var data = await storageService.GetFileData(
+        var fileData = await storageService.GetFileData(
             GetBagInfoFilePath(datasetVersion),
             null,
             cancellationToken);
 
-        if (data == null)
+        if (fileData == null)
         {
             return null;
         }
 
-        using (data.Stream)
+        using (fileData.Data.Stream)
         {
-            return await BagItInfo.Parse(data.Stream, cancellationToken);
+            return await BagItInfo.Parse(fileData.Data.Stream, cancellationToken);
         }
     }
 
-    private async Task<StorageServiceFileBase> StoreFileAndDispose(string filePath, FileData data, CancellationToken cancellationToken)
+    private async Task<BaseFileMetadata> StoreFileAndDispose(
+        string filePath, 
+        StreamWithLength data, 
+        string? contentType, 
+        CancellationToken cancellationToken)
     {
         using (data.Stream)
         {
-            return await storageService.StoreFile(filePath, data, cancellationToken);
+            return await storageService.StoreFile(filePath, data, contentType, cancellationToken);
         }
     }
 
@@ -881,7 +891,8 @@ public class ServiceImplementation(
         {
             return StoreFileAndDispose(
                 filePath,
-                CreateFileDataFromByteArray(manifest.Serialize()),
+                CreateStreamWithLengthFromByteArray(manifest.Serialize()),
+                textContentType,
                 cancellationToken);
         }
 
@@ -899,21 +910,26 @@ public class ServiceImplementation(
         {
             return StoreFileAndDispose(
                 filePath,
-                CreateFileDataFromByteArray(fetch.Serialize()),
+                CreateStreamWithLengthFromByteArray(fetch.Serialize()),
+                textContentType,
                 cancellationToken);
         }
 
         return storageService.DeleteFile(filePath, cancellationToken);
     }
 
-    private Task<StorageServiceFileBase> StoreBagInfo(
+    private Task<BaseFileMetadata> StoreBagInfo(
         DatasetVersion datasetVersion,
         byte[] contents,
         CancellationToken cancellationToken)
     {
         string filePath = GetBagInfoFilePath(datasetVersion);
 
-        return StoreFileAndDispose(filePath, CreateFileDataFromByteArray(contents), cancellationToken);
+        return StoreFileAndDispose(
+            filePath, 
+            CreateStreamWithLengthFromByteArray(contents), 
+            textContentType, 
+            cancellationToken);
     }
 
     private static string GetActualFilePath(DatasetVersion datasetVersion, BagItFetch fetch, string filePath)
@@ -926,7 +942,7 @@ public class ServiceImplementation(
         return GetFullFilePath(datasetVersion, filePath);
     }
 
-    private async IAsyncEnumerable<StorageServiceFile> ListPayloadFiles(
+    private async IAsyncEnumerable<FileMetadata> ListPayloadFiles(
         DatasetVersion datasetVersion,
         FileType? type,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -941,8 +957,8 @@ public class ServiceImplementation(
         }
     }
 
-    private static FileData CreateFileDataFromByteArray(byte[] data) =>
-        new(new MemoryStream(data), data.LongLength, "text/plain");
+    private static StreamWithLength CreateStreamWithLengthFromByteArray(byte[] data) =>
+        new(new MemoryStream(data), data.LongLength);
 
     private async Task<bool> VersionHasBeenPublished(DatasetVersion datasetVersion, CancellationToken cancellationToken) =>
         await storageService.GetFileMetadata(GetBagItFilePath(datasetVersion), cancellationToken) != null;
