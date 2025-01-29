@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Swashbuckle.AspNetCore.Annotations;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
@@ -20,11 +21,11 @@ namespace DorisStorageAdapter.Controllers;
 
 [ApiController]
 public class FileController(
-    ServiceImplementation appService,
+    IFileService fileService,
     IAuthorizationService authorizationService,
     IAuthorizationPolicyProvider authorizationPolicyProvider) : ControllerBase
 {
-    private readonly ServiceImplementation appService = appService;
+    private readonly IFileService fileService = fileService;
     private readonly IAuthorizationService authorizationService = authorizationService;
     private readonly IAuthorizationPolicyProvider authorizationPolicyProvider = authorizationPolicyProvider;
 
@@ -51,7 +52,7 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
@@ -61,7 +62,7 @@ public class FileController(
             return TypedResults.Problem("Missing Content-Length.", statusCode: 411);
         }
 
-        var result = await appService.StoreFile(
+        var result = await fileService.StoreFile(
             datasetVersion: datasetVersion, 
             type: type, 
             filePath: filePath, 
@@ -91,12 +92,12 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
-        await appService.DeleteFile(datasetVersion, type, filePath, cancellationToken);
+        await fileService.DeleteFile(datasetVersion, type, filePath, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -115,12 +116,12 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
-        await appService.ImportFiles(datasetVersion, type, fromVersion, cancellationToken);
+        await fileService.ImportFiles(datasetVersion, type, fromVersion, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -141,6 +142,8 @@ public class FileController(
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(filePath);
+
         ByteRange? ParseByteRange()
         {
             var rangeHeader = Request.GetTypedHeaders().Range;
@@ -163,7 +166,7 @@ public class FileController(
 
             if (!authorizationResult.Succeeded ||
                 !User.IsInRole(Roles.ReadData) ||
-                !CheckDatasetVersionClaims(datasetVersion))
+                !CheckClaims(datasetVersion))
             {
                 return TypedResults.Forbid();
             }
@@ -171,7 +174,7 @@ public class FileController(
             restrictToPubliclyAccessible = false;
         }
 
-        var fileData = await appService.GetFileData(
+        var fileData = await fileService.GetFileData(
             datasetVersion: datasetVersion,
             type: type,
             filePath: filePath,
@@ -187,7 +190,7 @@ public class FileController(
 
         // Use a fake seekable stream here in order for TypedResults.Stream()
         // to work as intended when using byte ranges.
-        // fileData.Data.Stream as returned from appService.GetFileData() is already sliced
+        // fileData.Data.Stream as returned from fileService.GetFileData() is already sliced
         // according to the given byte range, but the internal logic in TypedResults.Stream()
         // will try to seek according to the byte range. Using a FakeSeekableStream fixes
         // that by making seeking a no-op.
@@ -219,13 +222,13 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
         return TypedResults.Stream(_ => 
-            appService.WriteFileDataAsZip(
+            fileService.WriteFileDataAsZip(
                 datasetVersion, 
                 path, 
                 Response.BodyWriter.AsStream(),
@@ -247,14 +250,14 @@ public class FileController(
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
-        return TypedResults.Ok(appService.ListFiles(datasetVersion, cancellationToken));
+        return TypedResults.Ok(fileService.ListFiles(datasetVersion, cancellationToken));
     }
 
-    private bool CheckDatasetVersionClaims(DatasetVersion datasetVersion) =>
+    private bool CheckClaims(DatasetVersion datasetVersion) =>
         Claims.CheckClaims(datasetVersion, User.Claims);
 }

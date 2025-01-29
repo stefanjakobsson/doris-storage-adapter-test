@@ -9,9 +9,45 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.BagIt;
 
-internal sealed class BagItFetch
+internal sealed class BagItFetch : IBagItElement<BagItFetch>
 {
     private readonly SortedDictionary<string, BagItFetchItem> items = new(StringComparer.Ordinal);
+
+    public IEnumerable<BagItFetchItem> Items => items.Values;
+
+    public bool AddOrUpdateItem(BagItFetchItem item)
+    {
+        if (TryGetItem(item.FilePath, out var existingItem) &&
+            item == existingItem)
+        {
+            return false;
+        }
+
+        items[item.FilePath] = item;
+
+        return true;
+    }
+
+    public bool Contains(string filePath) => items.ContainsKey(filePath);
+
+    public bool RemoveItem(string filePath) => items.Remove(filePath);
+
+    public bool TryGetItem(string filePath, out BagItFetchItem item)
+    {
+        if (items.TryGetValue(filePath, out var value))
+        {
+            item = value;
+            return true;
+        }
+
+        item = new("", 0, "");
+        return false;
+    }
+
+    public static string FileName => "fetch.txt";
+
+    public bool HasValues() => Items.Any();
+
 
     public static async Task<BagItFetch> Parse(Stream stream, CancellationToken cancellationToken)
     {
@@ -34,44 +70,20 @@ internal sealed class BagItFetch
         return result;
     }
 
-    public bool Contains(string filePath) => items.ContainsKey(filePath);
-
-    public bool TryGetItem(string filePath, out BagItFetchItem item)
-    {
-        if (items.TryGetValue(filePath, out var value))
-        {
-            item = value;
-            return true;
-        }
-
-        item = new("", 0, "");
-        return false;
-    }
-
-    public bool AddOrUpdateItem(BagItFetchItem item)
-    {
-        if (TryGetItem(item.FilePath, out var existingItem) &&
-            item == existingItem)
-        {
-            return false;
-        }
-
-        items[item.FilePath] = item;
-
-        return true;
-    }
-
-    public bool RemoveItem(string filePath) => items.Remove(filePath);
-
     public byte[] Serialize()
     {
-        var values = Items.Select(i =>
-            i.Url + ' ' +
-            (i.Length?.ToString(CultureInfo.InvariantCulture) ?? "-") + ' ' +
-            BagitHelpers.EncodeFilePath(i.FilePath));
+        var builder = new StringBuilder();
 
-        return Encoding.UTF8.GetBytes(string.Join('\n', values));
+        foreach (var item in Items)
+        {
+            builder.Append(item.Url);
+            builder.Append(' ');
+            builder.Append(item.Length?.ToString(CultureInfo.InvariantCulture) ?? "-");
+            builder.Append(' ');
+            builder.Append(BagitHelpers.EncodeFilePath(item.FilePath));
+            builder.Append('\n');
+        }
+
+        return Encoding.UTF8.GetBytes(builder.ToString());
     }
-
-    public IEnumerable<BagItFetchItem> Items => items.Values;
 }

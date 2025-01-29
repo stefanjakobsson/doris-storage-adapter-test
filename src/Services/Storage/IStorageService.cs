@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Storage;
 
-public interface IStorageService
+internal interface IStorageService
 {
     Task<BaseFileMetadata> StoreFile(string filePath, StreamWithLength data, string? contentType, CancellationToken cancellationToken);
 

@@ -8,52 +8,12 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.BagIt;
 
-internal sealed class BagItManifest
+internal abstract class BagItManifest<T> where T : BagItManifest<T>, new()
 {
     private readonly SortedDictionary<string, BagItManifestItem> items = new(StringComparer.Ordinal);
     private readonly Dictionary<byte[], List<BagItManifestItem>> checksumToItems = new(ByteArrayComparer.Default);
 
-    public static async Task<BagItManifest> Parse(Stream stream, CancellationToken cancellationToken)
-    {
-        var result = new BagItManifest();
-
-        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
-        string? line;
-        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
-        {
-            int index = line.IndexOf(' ', StringComparison.Ordinal);
-            string checksum = line[..index];
-            string filePath = BagitHelpers.DecodeFilePath(line[(index + 1)..]);
-
-            result.AddOrUpdateItem(new(filePath, Convert.FromHexString(checksum)));
-        }
-
-        return result;
-    }
-
-    public bool Contains(string filePath) => items.ContainsKey(filePath);
-
-    public bool TryGetItem(string filePath, out BagItManifestItem item)
-    {
-        if (items.TryGetValue(filePath, out var value))
-        {
-            item = value;
-            return true;
-        }
-
-        item = new("", []);
-        return false;
-    }
-
-    public IEnumerable<BagItManifestItem> GetItemsByChecksum(byte[] checksum)
-    {
-        if (checksumToItems.TryGetValue(checksum, out var items))
-        {
-            return items;
-        }
-
-        return [];
-    }
+    public IEnumerable<BagItManifestItem> Items => items.Values;
 
     public bool AddOrUpdateItem(BagItManifestItem item)
     {
@@ -81,6 +41,18 @@ internal sealed class BagItManifest
         return true;
     }
 
+    public bool Contains(string filePath) => items.ContainsKey(filePath);
+
+    public IEnumerable<BagItManifestItem> GetItemsByChecksum(byte[] checksum)
+    {
+        if (checksumToItems.TryGetValue(checksum, out var items))
+        {
+            return items;
+        }
+
+        return [];
+    }
+
     public bool RemoveItem(string filePath)
     {
         if (TryGetItem(filePath, out var item))
@@ -98,14 +70,52 @@ internal sealed class BagItManifest
         return false;
     }
 
-    public byte[] Serialize()
+    public bool TryGetItem(string filePath, out BagItManifestItem item)
     {
-        var values = Items.Select(i =>
-            Convert.ToHexString(i.Checksum) + ' ' +
-            BagitHelpers.EncodeFilePath(i.FilePath));
+        if (items.TryGetValue(filePath, out var value))
+        {
+            item = value;
+            return true;
+        }
 
-        return Encoding.UTF8.GetBytes(string.Join('\n', values));
+        item = new("", []);
+        return false;
     }
 
-    public IEnumerable<BagItManifestItem> Items => items.Values;
+    public bool HasValues() => Items.Any();
+
+    public static async Task<T> Parse(Stream stream, CancellationToken cancellationToken)
+    {
+        var result = new T();
+
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+        string? line;
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
+        {
+            int index = line.IndexOf(' ', StringComparison.Ordinal);
+            string checksum = line[..index];
+            string filePath = BagitHelpers.DecodeFilePath(line[(index + 1)..]);
+
+            result.AddOrUpdateItem(new(filePath, Convert.FromHexString(checksum)));
+        }
+
+        return result;
+    }
+
+    public byte[] Serialize()
+    {
+        var builder = new StringBuilder();
+
+        foreach (var item in Items)
+        {
+#pragma warning disable CA1308 // Normalize strings to uppercase
+            builder.Append(Convert.ToHexString(item.Checksum).ToLowerInvariant());
+#pragma warning restore CA1308
+            builder.Append(' ');
+            builder.Append(BagitHelpers.EncodeFilePath(item.FilePath));
+            builder.Append('\n');
+        }
+
+        return Encoding.UTF8.GetBytes(builder.ToString());
+    }
 }

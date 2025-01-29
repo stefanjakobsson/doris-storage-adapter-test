@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace DorisStorageAdapter.Services.Lock;
 
-public interface ILockService
+internal interface ILockService
 {
     Task<IDisposable> LockPath(
         string path, 

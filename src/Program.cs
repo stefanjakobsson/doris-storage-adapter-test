@@ -162,7 +162,9 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSingleton<ILockService, InProcessLockService>();
-builder.Services.AddTransient<ServiceImplementation>();
+builder.Services.AddTransient<IDatasetVersionService, DatasetVersionService>();
+builder.Services.AddTransient<IFileService, FileService>();
+builder.Services.AddTransient<MetadataService>();
 
 // Setup storage service based on configuration
 void SetupStorageService()

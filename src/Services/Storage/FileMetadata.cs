@@ -2,7 +2,7 @@
 
 namespace DorisStorageAdapter.Services.Storage;
 
-public record FileMetadata(
+internal sealed record FileMetadata(
     string? ContentType,
     DateTime? DateCreated,
     DateTime? DateModified,

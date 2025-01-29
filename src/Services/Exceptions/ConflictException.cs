@@ -1,6 +1,6 @@
 ﻿namespace DorisStorageAdapter.Services.Exceptions;
 
-public class ConflictException : ApiException
+internal sealed class ConflictException : ApiException
 {
     public ConflictException() : base("Write conflict.", 409) 
     {

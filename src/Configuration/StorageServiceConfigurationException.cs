@@ -2,7 +2,7 @@
 
 namespace DorisStorageAdapter.Configuration;
 
-public class StorageServiceConfigurationException : Exception
+internal sealed class StorageServiceConfigurationException : Exception
 {
     public StorageServiceConfigurationException() : base()
     {

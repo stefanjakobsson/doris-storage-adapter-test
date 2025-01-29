@@ -1,6 +1,6 @@
 ﻿namespace DorisStorageAdapter.Models;
 
-public enum DatasetStatus
+internal enum DatasetStatus
 {
     completed,
     withdrawn

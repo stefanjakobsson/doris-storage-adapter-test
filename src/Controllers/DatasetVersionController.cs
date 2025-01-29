@@ -12,9 +12,9 @@ using System.Threading.Tasks;
 namespace DorisStorageAdapter.Controllers;
 
 [ApiController]
-public class DatasetVersionController(ServiceImplementation appService) : ControllerBase
+public class DatasetVersionController(IDatasetVersionService service) : ControllerBase
 {
-    private readonly ServiceImplementation appService = appService;
+    private readonly IDatasetVersionService service = service;
 
     [HttpPut("{identifier}/{version}/publish")]
     [Authorize(Roles = Roles.Service)]
@@ -33,12 +33,12 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
-        await appService.PublishDatasetVersion(datasetVersion, accessRight, doi, cancellationToken);
+        await service.PublishDatasetVersion(datasetVersion, accessRight, doi, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -57,16 +57,16 @@ public class DatasetVersionController(ServiceImplementation appService) : Contro
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        if (!CheckDatasetVersionClaims(datasetVersion))
+        if (!CheckClaims(datasetVersion))
         {
             return TypedResults.Forbid();
         }
 
-        await appService.WithdrawDatasetVersion(datasetVersion, cancellationToken);
+        await service.WithdrawDatasetVersion(datasetVersion, cancellationToken);
 
         return TypedResults.Ok();
     }
 
-    private bool CheckDatasetVersionClaims(DatasetVersion datasetVersion) =>
+    private bool CheckClaims(DatasetVersion datasetVersion) =>
        Claims.CheckClaims(datasetVersion, User.Claims);
 }

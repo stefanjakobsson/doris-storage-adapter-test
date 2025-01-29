@@ -10,7 +10,7 @@ using DorisStorageAdapter.Models;
 
 namespace DorisStorageAdapter.Services.BagIt;
 
-internal sealed class BagItInfo
+internal sealed class BagItInfo : IBagItElement<BagItInfo>
 {
     private readonly SortedDictionary<string, List<BagItInfoItem>> items = new(StringComparer.Ordinal);
 
@@ -34,6 +34,8 @@ internal sealed class BagItInfo
     // http://publications.europa.eu/resource/authority/dataset-status/WITHDRAWN
     private const string withdrawnDatasetStatusValue = "WITHDRAWN";
 
+    public sealed record PayloadOxumType(long OctetCount, long StreamCount);
+
     public DateTime? BaggingDate
     {
         get => GetValue(baggingDateLabel, v => DateTime.TryParseExact(v,
@@ -44,11 +46,13 @@ internal sealed class BagItInfo
 
         set => SetOrRemoveItem(baggingDateLabel, value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
     }
+
     public string? BagGroupIdentifier
     {
         get => GetValue(bagGroupIdentifierLabel, v => v);
         set => SetOrRemoveItem(bagGroupIdentifierLabel, value);
     }
+
     public string? BagSize
     {
         get => GetValue(bagSizeLabel, v => v);
@@ -148,6 +152,8 @@ internal sealed class BagItInfo
         return default;
     }
 
+    public static string FileName => "bag-info.txt";
+
     public static async Task<BagItInfo> Parse(Stream stream, CancellationToken cancellationToken)
     {
         var result = new BagItInfo();
@@ -200,10 +206,21 @@ internal sealed class BagItInfo
 
     public byte[] Serialize()
     {
-        var values = items.Values.SelectMany(i => i).Select(i => i.Label + ": " + i.Value);
+        var builder = new StringBuilder();
 
-        return Encoding.UTF8.GetBytes(string.Join('\n', values));
+        foreach (var list in items.Values)
+        {
+            foreach (var item in list)
+            {
+                builder.Append(item.Label);
+                builder.Append(": ");
+                builder.Append(item.Value);
+                builder.Append('\n');
+            }
+        }
+
+        return Encoding.UTF8.GetBytes(builder.ToString());
     }
 
-    public sealed record PayloadOxumType(long OctetCount, long StreamCount);
+    public bool HasValues() => items.Count > 0;
 }

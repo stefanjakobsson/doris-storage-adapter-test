@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace DorisStorageAdapter.Configuration;
 
-public record GeneralConfiguration
+internal sealed record GeneralConfiguration
 {
     private readonly Uri publicUrl;
 

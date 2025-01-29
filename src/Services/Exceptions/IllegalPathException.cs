@@ -1,6 +1,6 @@
 ﻿namespace DorisStorageAdapter.Services.Exceptions;
 
-public class IllegalPathException : ApiException
+internal sealed class IllegalPathException : ApiException
 {
     public IllegalPathException() : base("Illegal path.")
     {
