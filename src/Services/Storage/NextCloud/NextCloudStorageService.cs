@@ -115,7 +115,7 @@ internal sealed class NextCloudStorageService : IStorageService
                     Headers = [destinationHeader]
                 }));
 
-                long bytesLeft = data.Stream.Length;
+                long bytesLeft = data.Length;
                 int chunk = 1;
 
                 do
@@ -173,7 +173,7 @@ internal sealed class NextCloudStorageService : IStorageService
         {
             await CreateDirectory(directoryUri, cancellationToken);
 
-            if (data.Stream.Length > configuration.ChunkedUploadThreshold)
+            if (data.Length > configuration.ChunkedUploadThreshold)
             {
                 now = await DoChunkedUpload();
             }
