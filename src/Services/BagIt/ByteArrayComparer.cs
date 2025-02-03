@@ -4,13 +4,13 @@ using System.Collections.Generic;
 namespace DorisStorageAdapter.Services.BagIt;
 
 /// <summary>
-///    An IEqualityComparer that compares two byte arrays to see if they
-///    are equal to each other based on the value sequences contained within
-///    the arrays.
+/// An IEqualityComparer that compares two byte arrays to see if they
+/// are equal to each other based on the value sequences contained within
+/// the arrays.
 /// </summary>
 internal sealed class ByteArrayComparer : IEqualityComparer<byte[]>
 {
-    //    Private backing field for the Default property below.
+    // Private backing field for the Default property below.
     private static readonly ByteArrayComparer _default = new();
 
     /// <summary>
@@ -19,8 +19,8 @@ internal sealed class ByteArrayComparer : IEqualityComparer<byte[]>
     public static ByteArrayComparer Default => _default;
 
     /// <summary>
-    ///    Tests for equality between two byte arrays based on their value
-    ///    sequences.
+    /// Tests for equality between two byte arrays based on their value
+    /// sequences.
     ///	<param name = "obj1">A byte array to test for equality against obj2.</param>
     /// <param name = "obj2">A byte array to test for equality againts obj1.</param>
     /// </summary>
@@ -32,7 +32,7 @@ internal sealed class ByteArrayComparer : IEqualityComparer<byte[]>
     }
 
     /// <summary>
-    ///    Gets a hash code to identify the given object.
+    /// Gets a hash code to identify the given object.
     /// </summary>
     /// <param name = "obj">The byte array to generate a hash code for.</param>
     public int GetHashCode(byte[] obj)

@@ -14,9 +14,6 @@ namespace DorisStorageAdapter.Services;
 /// <param name="length">The length of the underlying stream.</param>
 internal sealed class FakeSeekableStream(Stream underlyingStream, long length) : Stream
 {
-    public static Stream CreateSeekableStream(Stream underlyingStream, long length) =>
-        new FakeSeekableStream(underlyingStream, length);
-
     private readonly Stream underlyingStream = underlyingStream;
     private readonly long length = length;
     private long position;
