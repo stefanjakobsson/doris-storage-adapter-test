@@ -1,25 +1,20 @@
-#See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS publish
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+COPY src/DorisStorageAdapter.Helpers/DorisStorageAdapter.Helpers.csproj DorisStorageAdapter.Helpers/
+COPY src/DorisStorageAdapter.Server/DorisStorageAdapter.Server.csproj DorisStorageAdapter.Server/
+COPY src/DorisStorageAdapter.Services/DorisStorageAdapter.Services.csproj DorisStorageAdapter.Services/
+COPY src/Directory.Build.props .
+RUN dotnet restore DorisStorageAdapter.Server/DorisStorageAdapter.Server.csproj
+
+COPY src .
+RUN dotnet publish DorisStorageAdapter.Server/DorisStorageAdapter.Server.csproj -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 USER app
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
-
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["src/DorisStorageAdapter.csproj", "."]
-RUN dotnet restore "./DorisStorageAdapter.csproj"
-COPY . .
-WORKDIR "/src/."
-RUN dotnet build "./DorisStorageAdapter.csproj" -c $BUILD_CONFIGURATION -o /app/build
-
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./DorisStorageAdapter.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
-
-FROM base AS final
-WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "DorisStorageAdapter.dll"]
+ENTRYPOINT ["dotnet", "DorisStorageAdapter.Server.dll"]
