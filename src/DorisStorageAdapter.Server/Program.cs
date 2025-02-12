@@ -149,15 +149,31 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(nameof(FileController.StoreFile), policy =>
     {
-        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
-        policy.WithHeaders(HeaderNames.Authorization, HeaderNames.ContentLength, HeaderNames.ContentType);
-        policy.WithMethods(HttpMethods.Put);
+        policy
+            .WithOrigins(authorizationConfiguration.CorsAllowedOrigins)
+            .WithHeaders(
+                HeaderNames.Authorization, 
+                HeaderNames.ContentLength, 
+                HeaderNames.ContentType)
+            .WithMethods(HttpMethods.Put);
     });
     options.AddPolicy(nameof(FileController.DeleteFile), policy =>
     {
-        policy.WithOrigins(authorizationConfiguration.CorsAllowedOrigins);
-        policy.WithHeaders(HeaderNames.Authorization);
-        policy.WithMethods(HttpMethods.Delete);
+        policy
+            .WithOrigins(authorizationConfiguration.CorsAllowedOrigins)
+            .WithHeaders(HeaderNames.Authorization)
+            .WithMethods(HttpMethods.Delete);
+    });
+    options.AddPolicy(nameof(FileController.GetPublicFileData), policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .WithMethods(HttpMethods.Get)
+            .WithExposedHeaders(
+                HeaderNames.AcceptRanges, 
+                HeaderNames.ContentDisposition, 
+                HeaderNames.ContentRange);
     });
 });
 

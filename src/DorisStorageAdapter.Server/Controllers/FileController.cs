@@ -24,13 +24,9 @@ namespace DorisStorageAdapter.Server.Controllers;
 [ApiController]
 public sealed class FileController(
     IFileService fileService,
-    IAuthorizationService authorizationService,
-    IAuthorizationPolicyProvider authorizationPolicyProvider,
     IOptions<GeneralConfiguration> generalConfiguration) : ControllerBase
 {
     private readonly IFileService fileService = fileService;
-    private readonly IAuthorizationService authorizationService = authorizationService;
-    private readonly IAuthorizationPolicyProvider authorizationPolicyProvider = authorizationPolicyProvider;
 
     private readonly GeneralConfiguration generalConfiguration = generalConfiguration.Value;
 
@@ -39,7 +35,7 @@ public sealed class FileController(
     [DisableRequestSizeLimit] // Disable request size limit to allow streaming large files
     // DisableFormValueModelBinding makes sure that ASP.NET does not try to parse the body as form data
     // when Content-Type is "multipart/form-data" or "application/x-www-form-urlencoded".
-    [DisableFormValueModelBinding] 
+    [DisableFormValueModelBinding]
     [EnableCors(nameof(StoreFile))]
     [BinaryRequestBody("*/*")]
     [ProducesResponseType<File>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
@@ -68,11 +64,11 @@ public sealed class FileController(
         }
 
         var result = await fileService.StoreFile(
-            datasetVersion: datasetVersion, 
-            type: type, 
-            filePath: filePath, 
-            data: Request.Body, 
-            size: Request.Headers.ContentLength.Value, 
+            datasetVersion: datasetVersion,
+            type: type,
+            filePath: filePath,
+            data: Request.Body,
+            size: Request.Headers.ContentLength.Value,
             contentType: Request.Headers.ContentType,
             cancellationToken: cancellationToken);
 
@@ -132,6 +128,7 @@ public sealed class FileController(
 
     [HttpHead("file/{identifier}/{version}/{type}")]
     [HttpGet("file/{identifier}/{version}/{type}")]
+    [Authorize(Roles = Roles.ReadData)]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
     [SwaggerResponse(StatusCodes.Status206PartialContent, null, typeof(FileStreamResult), "*/*")]
     [ProducesResponseType(typeof(void), StatusCodes.Status416RangeNotSatisfiable)]
@@ -146,68 +143,48 @@ public sealed class FileController(
         [FromQuery, BindRequired] string filePath,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(filePath);
-
-        ByteRange? ParseByteRange()
-        {
-            var rangeHeader = Request.GetTypedHeaders().Range;
-            if (rangeHeader != null && rangeHeader.Ranges.Count == 1)
-            {
-                var rangeItem = rangeHeader.Ranges.First();
-                return new(rangeItem.From, rangeItem.To);
-            }
-
-            return null;
-        }
-
         var datasetVersion = new DatasetVersion(identifier, version);
-        bool restrictToPubliclyAccessible = true;
 
-        if (User.Identity != null && User.Identity.IsAuthenticated)
+        if (!CheckClaims(datasetVersion))
         {
-            var defaultPolicy = await authorizationPolicyProvider.GetDefaultPolicyAsync();
-            var authorizationResult = await authorizationService.AuthorizeAsync(User, defaultPolicy);
-
-            if (!authorizationResult.Succeeded ||
-                !User.IsInRole(Roles.ReadData) ||
-                !CheckClaims(datasetVersion))
-            {
-                return TypedResults.Forbid();
-            }
-
-            restrictToPubliclyAccessible = false;
+            return TypedResults.Forbid();
         }
 
-        var fileData = await fileService.GetFileData(
-            datasetVersion: datasetVersion,
-            type: type,
-            filePath: filePath,
-            isHeadRequest: Request.Method == HttpMethods.Head,
-            byteRange: ParseByteRange(),
-            restrictToPubliclyAccessible: restrictToPubliclyAccessible,
-            cancellationToken: cancellationToken); 
+        var result = await GetFileData(datasetVersion, type, filePath, false, cancellationToken);
 
-        if (fileData == null)
+        if (result == null)
         {
             return TypedResults.NotFound();
         }
 
-        // Use a fake seekable stream here in order for TypedResults.Stream()
-        // to work as intended when using byte ranges.
-        // fileData.Stream as returned from fileService.GetFileData() is already sliced
-        // according to the given byte range, but the internal logic in TypedResults.Stream()
-        // will try to seek according to the byte range. Using a FakeSeekableStream fixes
-        // that by making seeking a no-op.
-        fileData = fileData with
-        {
-            Stream = new FakeSeekableStream(fileData.Stream, fileData.Size)
-        };
+        return result;
+    }
 
-        return TypedResults.Stream(
-            stream: fileData.Stream,
-            contentType: fileData.ContentType, 
-            fileDownloadName: filePath.Split('/').Last(), 
-            enableRangeProcessing: true);
+    [HttpHead("file/public/{identifier}/{version}/{type}")]
+    [HttpGet("file/public/{identifier}/{version}/{type}")]
+    [EnableCors(nameof(GetPublicFileData))]
+    [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
+    [SwaggerResponse(StatusCodes.Status206PartialContent, null, typeof(FileStreamResult), "*/*")]
+    [ProducesResponseType(typeof(void), StatusCodes.Status416RangeNotSatisfiable)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+    [ProducesResponseType(typeof(void), StatusCodes.Status404NotFound)]
+    public async Task<Results<FileStreamHttpResult, NotFound>> GetPublicFileData(
+       string identifier,
+       string version,
+       FileType type,
+       [FromQuery, BindRequired] string filePath,
+       CancellationToken cancellationToken)
+    {
+        var datasetVersion = new DatasetVersion(identifier, version);
+
+        var result = await GetFileData(datasetVersion, type, filePath, false, cancellationToken);
+
+        if (result == null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        return result;
     }
 
     [HttpGet("file/{identifier}/{version}/zip")]
@@ -229,13 +206,13 @@ public sealed class FileController(
             return TypedResults.Forbid();
         }
 
-        return TypedResults.Stream(_ => 
+        return TypedResults.Stream(_ =>
             fileService.WriteFileDataAsZip(
-                datasetVersion, 
-                path, 
+                datasetVersion,
+                path,
                 Response.BodyWriter.AsStream(),
                 cancellationToken),
-            MediaTypeNames.Application.Zip, 
+            MediaTypeNames.Application.Zip,
             identifier + '-' + version + ".zip");
     }
 
@@ -246,7 +223,7 @@ public sealed class FileController(
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     public Results<Ok<IAsyncEnumerable<File>>, ForbidHttpResult> ListFiles(
-        string identifier, 
+        string identifier,
         string version,
         CancellationToken cancellationToken)
     {
@@ -271,7 +248,7 @@ public sealed class FileController(
     private bool CheckClaims(DatasetVersion datasetVersion) =>
         Claims.CheckClaims(datasetVersion, User.Claims);
 
-    private File ToFile(DatasetVersion datasetVersion, FileMetadata file) => new(
+    private static File ToFile(DatasetVersion datasetVersion, FileMetadata file) => new(
         ContentSize: file.Size,
         DateCreated: file.DateCreated,
         DateModified: file.DateModified,
@@ -280,11 +257,59 @@ public sealed class FileController(
 #pragma warning disable CA1308 // Normalize strings to uppercase
         Sha256: file.Sha256 == null ? null : Convert.ToHexString(file.Sha256).ToLowerInvariant(),
 #pragma warning restore CA1308
-        Type: file.Type,
-        Url: new(generalConfiguration.PublicUrl, "file/" +
-                Uri.EscapeDataString(datasetVersion.Identifier) + '/' + 
-                Uri.EscapeDataString(datasetVersion.Version) + '/' + 
-                file.Type +
-                "?filePath=" + Uri.EscapeDataString(file.Path))
+        Type: file.Type
     );
+
+    private async Task<FileStreamHttpResult?> GetFileData(
+        DatasetVersion datasetVersion,
+        FileType type,
+        string filePath,
+        bool restrictToPubliclyAccessible,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(filePath);
+
+        ByteRange? ParseByteRange()
+        {
+            var rangeHeader = Request.GetTypedHeaders().Range;
+            if (rangeHeader != null && rangeHeader.Ranges.Count == 1)
+            {
+                var rangeItem = rangeHeader.Ranges.First();
+                return new(rangeItem.From, rangeItem.To);
+            }
+
+            return null;
+        }
+
+        var fileData = await fileService.GetFileData(
+            datasetVersion: datasetVersion,
+            type: type,
+            filePath: filePath,
+            isHeadRequest: Request.Method == HttpMethods.Head,
+            byteRange: ParseByteRange(),
+            restrictToPubliclyAccessible: restrictToPubliclyAccessible,
+            cancellationToken: cancellationToken);
+
+        if (fileData == null)
+        {
+            return null;
+        }
+
+        // Use a fake seekable stream here in order for TypedResults.Stream()
+        // to work as intended when using byte ranges.
+        // fileData.Stream as returned from fileService.GetFileData() is already sliced
+        // according to the given byte range, but the internal logic in TypedResults.Stream()
+        // will try to seek according to the byte range. Using a FakeSeekableStream fixes
+        // that by making seeking a no-op.
+        fileData = fileData with
+        {
+            Stream = new FakeSeekableStream(fileData.Stream, fileData.Size)
+        };
+
+        return TypedResults.Stream(
+            stream: fileData.Stream,
+            contentType: fileData.ContentType,
+            fileDownloadName: filePath.Split('/').Last(),
+            enableRangeProcessing: true);
+    }
 }

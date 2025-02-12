@@ -10,5 +10,4 @@ public record File(
     string EncodingFormat,
     string Name,
     string? Sha256,
-    FileType Type,
-    Uri Url);
+    FileType Type);
