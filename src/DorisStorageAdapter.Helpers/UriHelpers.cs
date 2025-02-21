@@ -10,7 +10,7 @@ public static class UriHelpers
 
         if (!uri.AbsoluteUri.EndsWith('/'))
         {
-            return new Uri(uri.OriginalString + '/');
+            return new Uri(uri.AbsoluteUri + '/');
         }
 
         return uri;
