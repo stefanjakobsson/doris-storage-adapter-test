@@ -221,6 +221,12 @@ internal sealed class FileService(
         ArgumentNullException.ThrowIfNull(datasetVersion);
         ArgumentException.ThrowIfNullOrEmpty(fromVersion);
 
+        if (datasetVersion.Version == fromVersion)
+        {
+            // Importing from and to the same version, make no-op by simply returning
+            return;
+        }
+
         bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
             await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
