@@ -1,5 +1,4 @@
 using DorisStorageAdapter.Helpers;
-using DorisStorageAdapter.Server.Configuration;
 using DorisStorageAdapter.Server.Controllers.Attributes;
 using DorisStorageAdapter.Server.Controllers.Authorization;
 using DorisStorageAdapter.Services.Contract;
@@ -10,7 +9,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.Extensions.Options;
 using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
@@ -22,13 +20,9 @@ using System.Threading.Tasks;
 namespace DorisStorageAdapter.Server.Controllers;
 
 [ApiController]
-public sealed class FileController(
-    IFileService fileService,
-    IOptions<GeneralConfiguration> generalConfiguration) : ControllerBase
+public sealed class FileController(IFileService fileService) : ControllerBase
 {
     private readonly IFileService fileService = fileService;
-
-    private readonly GeneralConfiguration generalConfiguration = generalConfiguration.Value;
 
     [HttpPut("file/{identifier}/{version}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
@@ -72,7 +66,7 @@ public sealed class FileController(
             contentType: Request.Headers.ContentType,
             cancellationToken: cancellationToken);
 
-        return TypedResults.Ok(ToFile(datasetVersion, result));
+        return TypedResults.Ok(ToFile(result));
     }
 
     [HttpDelete("file/{identifier}/{version}/{type}")]
@@ -233,7 +227,7 @@ public sealed class FileController(
         {
             await foreach (var file in fileService.ListFiles(datasetVersion, cancellationToken))
             {
-                yield return ToFile(datasetVersion, file);
+                yield return ToFile(file);
             }
         }
 
@@ -248,7 +242,7 @@ public sealed class FileController(
     private bool CheckClaims(DatasetVersion datasetVersion) =>
         Claims.CheckClaims(datasetVersion, User.Claims);
 
-    private static File ToFile(DatasetVersion datasetVersion, FileMetadata file) => new(
+    private static File ToFile(FileMetadata file) => new(
         ContentSize: file.Size,
         DateCreated: file.DateCreated,
         DateModified: file.DateModified,
