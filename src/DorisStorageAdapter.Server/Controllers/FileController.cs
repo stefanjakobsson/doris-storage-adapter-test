@@ -171,7 +171,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        var result = await GetFileData(datasetVersion, type, filePath, false, cancellationToken);
+        var result = await GetFileData(datasetVersion, type, filePath, true, cancellationToken);
 
         if (result == null)
         {
