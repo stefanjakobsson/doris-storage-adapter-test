@@ -327,9 +327,14 @@ internal sealed class FileService(
 
         if (restrictToPubliclyAccessible)
         {
-            // Do not return file data unless dataset version is published (and not withdrawn),
+            // Do not return file data unless dataset version has been published, is not withdrawn,
             // and file type is either documentation (which entails publically accessible) or
             // access right is public.
+
+            if (!await metadataService.VersionHasBeenPublished(datasetVersion, cancellationToken))
+            {
+                return null;
+            }
 
             var bagInfo = await metadataService.LoadBagItElement<BagItInfo>(datasetVersion, cancellationToken);
 
