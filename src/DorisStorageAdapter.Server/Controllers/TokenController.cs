@@ -2,7 +2,7 @@
 using DorisStorageAdapter.Server.Controllers.Attributes;
 using DorisStorageAdapter.Server.Controllers.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using NetDevPack.Security.Jwt.Core.Interfaces;
@@ -15,10 +15,10 @@ namespace DorisStorageAdapter.Server.Controllers;
 [DevOnly]
 [ApiExplorerSettings(IgnoreApi = true)]
 [ApiController]
-public sealed class TokenController(IJwtService jwtService, IOptions<GeneralConfiguration> configuration) : ControllerBase
+public sealed class TokenController(IJwtService jwtService, IConfiguration configuration) : ControllerBase
 {
     private readonly IJwtService jwtService = jwtService;
-    private readonly GeneralConfiguration configuration = configuration.Value;
+    private readonly IConfiguration configuration = configuration;
 
     [HttpPost("dev/token/{identifier}/{version}")]
     public Task<string> CreateDataAccessToken(string identifier, string version, [FromQuery] string role)
@@ -29,12 +29,17 @@ public sealed class TokenController(IJwtService jwtService, IOptions<GeneralConf
     private async Task<string> CreateToken(string identifier, string version, string role)
     {
         var key = await jwtService.GetCurrentSigningCredentials();
+        var publicUrl = configuration.Get<GeneralConfiguration>()!.PublicUrl;
+        var jwksUri = configuration
+            .GetSection(AuthorizationConfiguration.ConfigurationSection)
+            .Get<AuthorizationConfiguration>()!
+            .JwksUri;
 
         var tokenHandler = new JsonWebTokenHandler();
         return tokenHandler.CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = configuration.PublicUrl.Scheme + "://" + configuration.PublicUrl.Authority,
-            Audience = configuration.PublicUrl.AbsoluteUri,
+            Issuer = jwksUri.Scheme + "://" + jwksUri.Authority,
+            Audience = publicUrl.AbsoluteUri,
             Subject = new([
                     new Claim("role", role),
                     new Claim(Claims.DatasetIdentifier, identifier),
