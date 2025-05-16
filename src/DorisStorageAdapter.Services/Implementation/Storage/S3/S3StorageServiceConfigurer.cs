@@ -1,4 +1,5 @@
-﻿using Amazon.S3;
+﻿using Amazon.Runtime;
+using Amazon.S3;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -30,7 +31,17 @@ internal sealed class S3StorageServiceConfigurer : IStorageServiceConfigurer<S3S
                     // when uploading objects, see S3StorageService.StoreFile().
                     MaxErrorRetry = 0,
                     ServiceURL = s3Config.ServiceUrl,
-                    ForcePathStyle = s3Config.ForcePathStyle
+                    ForcePathStyle = s3Config.ForcePathStyle,
+
+                    RequestChecksumCalculation =
+                        s3Config.RequestChecksumCalculationEnabled
+                            ? RequestChecksumCalculation.WHEN_SUPPORTED
+                            : RequestChecksumCalculation.WHEN_REQUIRED,
+
+                    ResponseChecksumValidation =
+                        s3Config.ResponseChecksumCalculationEnabled
+                            ? ResponseChecksumValidation.WHEN_SUPPORTED
+                            : ResponseChecksumValidation.WHEN_REQUIRED
                 });
             });
 

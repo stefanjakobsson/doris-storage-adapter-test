@@ -17,4 +17,6 @@ internal sealed record S3StorageServiceConfiguration
     public bool ForcePathStyle { get; init; } = true;
     public long MultiPartUploadThreshold { get; init; } = 100 * 1024 * 1024;
     public long MultiPartUploadChunkSize { get; init; } = 10 * 1024 * 1024;
+    public bool RequestChecksumCalculationEnabled { get; init; } = true;
+    public bool ResponseChecksumCalculationEnabled { get; init; } = true;
 }
