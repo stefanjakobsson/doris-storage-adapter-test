@@ -96,7 +96,7 @@ internal sealed class S3StorageService(
             return new(
                 ContentType: null,
                 DateCreated: null,
-                DateModified: response.LastModified.ToUniversalTime(),
+                DateModified: response.LastModified?.ToUniversalTime(),
                 Path: filePath,
                 Size: response.ContentLength);
         }
@@ -200,9 +200,9 @@ internal sealed class S3StorageService(
             yield return new(
                 ContentType: null,
                 DateCreated: null,
-                DateModified: file.LastModified.ToUniversalTime(),
+                DateModified: file.LastModified?.ToUniversalTime(),
                 Path: file.Key,
-                Size: file.Size);
+                Size: file.Size.GetValueOrDefault());
         }
     }
 }
