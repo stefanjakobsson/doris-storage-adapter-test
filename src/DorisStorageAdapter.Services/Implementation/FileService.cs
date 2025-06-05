@@ -160,7 +160,7 @@ internal sealed class FileService(
             ContentType: result.ContentType ?? MimeTypes.GetMimeType(filePath),
             DateCreated: result.DateCreated,
             DateModified: result.DateModified,
-            Path: filePath,
+            Path: filePath[Paths.GetPayloadPath(type).Length..],
             Sha256: checksum,
             Size: bytesRead,
             Type: type);
