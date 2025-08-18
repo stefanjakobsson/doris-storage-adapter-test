@@ -28,6 +28,7 @@ internal sealed class DatasetVersionService(
     public async Task PublishDatasetVersion(
         DatasetVersion datasetVersion,
         AccessRight accessRight,
+        string canonicalDoi,
         string doi,
         CancellationToken cancellationToken)
     {
@@ -36,7 +37,8 @@ internal sealed class DatasetVersionService(
 
         bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
-            await PublishDatasetVersionImpl(datasetVersion, accessRight, doi, cancellationToken);
+            await PublishDatasetVersionImpl(
+                datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
         },
         cancellationToken);
 
@@ -49,6 +51,7 @@ internal sealed class DatasetVersionService(
     private async Task PublishDatasetVersionImpl(
         DatasetVersion datasetVersion,
         AccessRight accessRight,
+        string canonicalDoi,
         string doi,
         CancellationToken cancellationToken)
     {
@@ -81,9 +84,10 @@ internal sealed class DatasetVersionService(
         var bagInfo = new BagItInfo
         {
             BaggingDate = DateTime.UtcNow,
-            BagGroupIdentifier = datasetVersion.Identifier,
+            BagGroupIdentifier = canonicalDoi,
             BagSize = ByteSize.FromBytes(octetCount).ToBinaryString(CultureInfo.InvariantCulture),
             ExternalIdentifier = [doi],
+            InternalSenderIdentifier = [datasetVersion.Identifier + '-' + datasetVersion.Version],
             PayloadOxum = new(octetCount, payloadManifest?.BagItElement?.Items?.LongCount() ?? 0),
         };
 

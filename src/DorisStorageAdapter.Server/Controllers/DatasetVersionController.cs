@@ -28,6 +28,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
         string identifier,
         string version,
         [FromForm(Name = "access_right")] AccessRight accessRight,
+        [FromForm(Name = "canonical_doi")] string canonicalDoi,
         [FromForm] string doi,
         CancellationToken cancellationToken)
     {
@@ -38,7 +39,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
             return TypedResults.Forbid();
         }
 
-        await service.PublishDatasetVersion(datasetVersion, accessRight, doi, cancellationToken);
+        await service.PublishDatasetVersion(datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
 
         return TypedResults.Ok();
     }
