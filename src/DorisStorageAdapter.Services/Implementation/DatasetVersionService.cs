@@ -25,7 +25,7 @@ internal sealed class DatasetVersionService(
 
     private static readonly byte[] bagItSha256 = SHA256.HashData(BagItDeclaration.Instance.Serialize());
 
-    public async Task PublishDatasetVersion(
+    public async Task Publish(
         DatasetVersion datasetVersion,
         AccessRight accessRight,
         string canonicalDoi,
@@ -42,13 +42,12 @@ internal sealed class DatasetVersionService(
                 throw new DatasetStatusException();
             }
 
-            await PublishDatasetVersionImpl(
-                datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
+            await PublishImpl(datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
         },
         cancellationToken);
     }
 
-    private async Task PublishDatasetVersionImpl(
+    private async Task PublishImpl(
         DatasetVersion datasetVersion,
         AccessRight accessRight,
         string canonicalDoi,
@@ -114,7 +113,7 @@ internal sealed class DatasetVersionService(
         await metadataService.StoreBagItElement(datasetVersion, BagItDeclaration.Instance, CancellationToken.None);
     }
 
-    public async Task SetDatasetVersionStatus(
+    public async Task SetStatus(
         DatasetVersion datasetVersion,
         DatasetVersionStatus status,
         CancellationToken cancellationToken)
@@ -128,12 +127,12 @@ internal sealed class DatasetVersionService(
                 throw new DatasetStatusException();
             }
 
-            await SetDatasetVersionStatusImpl(datasetVersion, status, cancellationToken);
+            await SetStatusImpl(datasetVersion, status, cancellationToken);
         },
         cancellationToken);
     }
 
-    private async Task SetDatasetVersionStatusImpl(
+    private async Task SetStatusImpl(
         DatasetVersion datasetVersion,
         DatasetVersionStatus status,
         CancellationToken cancellationToken)

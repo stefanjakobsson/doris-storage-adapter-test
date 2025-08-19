@@ -24,7 +24,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
-    public async Task<Results<Ok, ForbidHttpResult>> PublishDatasetVersion(
+    public async Task<Results<Ok, ForbidHttpResult>> Publish(
         string identifier,
         string version,
         [FromForm(Name = "access_right")] AccessRight accessRight,
@@ -39,7 +39,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
             return TypedResults.Forbid();
         }
 
-        await service.PublishDatasetVersion(datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
+        await service.Publish(datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -52,7 +52,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
-    public async Task<Results<Ok, ForbidHttpResult>> SetDatasetVersionStatus(
+    public async Task<Results<Ok, ForbidHttpResult>> SetStatus(
         string identifier, 
         string version,
         [FromForm] DatasetVersionStatus status,
@@ -65,7 +65,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
             return TypedResults.Forbid();
         }
 
-        await service.SetDatasetVersionStatus(datasetVersion, status, cancellationToken);
+        await service.SetStatus(datasetVersion, status, cancellationToken);
 
         return TypedResults.Ok();
     }

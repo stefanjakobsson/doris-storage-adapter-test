@@ -56,7 +56,7 @@ internal sealed class MetadataService(IStorageService storageService)
             var bytes = element.Serialize();
 
             using var stream = new MemoryStream(bytes);
-            await storageService.StoreFile(
+            await storageService.Store(
                 filePath,
                 stream,
                 stream.Length,
@@ -66,7 +66,7 @@ internal sealed class MetadataService(IStorageService storageService)
             return bytes;
         }
 
-        await storageService.DeleteFile(filePath, cancellationToken);
+        await storageService.Delete(filePath, cancellationToken);
         return [];
     }
 
@@ -77,7 +77,7 @@ internal sealed class MetadataService(IStorageService storageService)
     {
         string path = Paths.GetDatasetVersionPath(datasetVersion);
 
-        await foreach (var file in storageService.ListFiles(
+        await foreach (var file in storageService.List(
             path + Paths.GetPayloadPath(type),
             cancellationToken))
         {
@@ -86,11 +86,11 @@ internal sealed class MetadataService(IStorageService storageService)
     }
 
     public async Task<bool> VersionHasBeenPublished(DatasetVersion datasetVersion, CancellationToken cancellationToken) =>
-        await storageService.GetFileMetadata(Paths.GetFullFilePath(datasetVersion, BagItDeclaration.FileName), cancellationToken) != null;
+        await storageService.GetMetadata(Paths.GetFullFilePath(datasetVersion, BagItDeclaration.FileName), cancellationToken) != null;
 
     private Task<StorageFileData?> GetBagItElementFileData<T>(
         DatasetVersion datasetVersion, CancellationToken cancellationToken)
         where T : IBagItElement<T> =>
-        storageService.GetFileData(
+        storageService.GetData(
             Paths.GetFullFilePath(datasetVersion, T.FileName), null, cancellationToken);
 }

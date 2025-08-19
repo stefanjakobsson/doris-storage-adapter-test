@@ -147,7 +147,7 @@ builder.Services
 // Set up CORS policys per endpoint
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(nameof(FileController.StoreFile), policy =>
+    options.AddPolicy(FileController.storeCorsPolicyName, policy =>
     {
         policy
             .WithOrigins(authorizationConfiguration.CorsAllowedOrigins)
@@ -157,14 +157,14 @@ builder.Services.AddCors(options =>
                 HeaderNames.ContentType)
             .WithMethods(HttpMethods.Put);
     });
-    options.AddPolicy(nameof(FileController.DeleteFile), policy =>
+    options.AddPolicy(FileController.deleteCorsPolicyName, policy =>
     {
         policy
             .WithOrigins(authorizationConfiguration.CorsAllowedOrigins)
             .WithHeaders(HeaderNames.Authorization)
             .WithMethods(HttpMethods.Delete);
     });
-    options.AddPolicy(nameof(FileController.GetPublicFileData), policy =>
+    options.AddPolicy(FileController.getPublicDataCorsPolicyName, policy =>
     {
         policy
             .AllowAnyOrigin()

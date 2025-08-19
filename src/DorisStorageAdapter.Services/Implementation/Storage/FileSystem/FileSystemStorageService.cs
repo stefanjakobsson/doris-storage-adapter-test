@@ -34,7 +34,7 @@ internal sealed class FileSystemStorageService(
     private readonly string basePath = Path.GetFullPath(configuration.Value.BasePath);
     private readonly string tempFilePath = Path.GetFullPath(configuration.Value.TempFilePath);
 
-    public async Task<StorageFileBaseMetadata> StoreFile(
+    public async Task<StorageFileBaseMetadata> Store(
         string filePath,
         Stream data,
         long size,
@@ -114,7 +114,7 @@ internal sealed class FileSystemStorageService(
             DateModified: dateModified ?? DateTime.UtcNow);
     }
 
-    public async Task DeleteFile(string filePath, CancellationToken cancellationToken)
+    public async Task Delete(string filePath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -143,7 +143,7 @@ internal sealed class FileSystemStorageService(
 #pragma warning restore CA1031
     }
 
-    public Task<StorageFileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    public Task<StorageFileMetadata?> GetMetadata(string filePath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -158,7 +158,7 @@ internal sealed class FileSystemStorageService(
         return Task.FromResult<StorageFileMetadata?>(null);
     }
 
-    public Task<StorageFileData?> GetFileData(string filePath, StorageByteRange? byteRange, CancellationToken cancellationToken)
+    public Task<StorageFileData?> GetData(string filePath, StorageByteRange? byteRange, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -217,7 +217,7 @@ internal sealed class FileSystemStorageService(
     }
 
 #pragma warning disable CS1998 // This async method lacks 'await'
-    public async IAsyncEnumerable<StorageFileMetadata> ListFiles(
+    public async IAsyncEnumerable<StorageFileMetadata> List(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {

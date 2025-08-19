@@ -27,7 +27,7 @@ internal sealed class FileService(
     private readonly ILockService lockService = lockService;
     private readonly MetadataService metadataService = metadataService;
 
-    public async Task<FileMetadata> StoreFile(
+    public async Task<FileMetadata> Store(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -51,7 +51,7 @@ internal sealed class FileService(
             lockSuccessful = await lockService.TryLockPath(fullFilePath, async () =>
             {
                 await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
-                result = await StoreFileImpl(
+                result = await StoreImpl(
                     datasetVersion,
                     type,
                     filePath,
@@ -74,7 +74,7 @@ internal sealed class FileService(
         return result!;
     }
 
-    private async Task<FileMetadata> StoreFileImpl(
+    private async Task<FileMetadata> StoreImpl(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -123,7 +123,7 @@ internal sealed class FileService(
 
         using (var hashStream = new CountedHashStream(data))
         {
-            result = await storageService.StoreFile(
+            result = await storageService.Store(
                 fullFilePath,
                 hashStream,
                 size,
@@ -166,7 +166,7 @@ internal sealed class FileService(
             Type: type);
     }
 
-    public async Task DeleteFile(
+    public async Task Delete(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -185,7 +185,7 @@ internal sealed class FileService(
             lockSuccessful = await lockService.TryLockPath(fullFilePath, async () =>
             {
                 await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
-                await DeleteFileImpl(datasetVersion, filePath, fullFilePath, cancellationToken);
+                await DeleteImpl(datasetVersion, filePath, fullFilePath, cancellationToken);
             },
             cancellationToken);
         },
@@ -197,13 +197,13 @@ internal sealed class FileService(
         }
     }
 
-    private async Task DeleteFileImpl(
+    private async Task DeleteImpl(
         DatasetVersion datasetVersion,
         string filePath,
         string fullFilePath,
         CancellationToken cancellationToken)
     {
-        await storageService.DeleteFile(fullFilePath, cancellationToken);
+        await storageService.Delete(fullFilePath, cancellationToken);
 
         // Do not cancel the operation from this point on,
         // since the file has been successfully deleted.
@@ -212,7 +212,7 @@ internal sealed class FileService(
         await RemoveItemFromFetch(datasetVersion, filePath, CancellationToken.None);
     }
 
-    public async Task ImportFiles(
+    public async Task Import(
        DatasetVersion datasetVersion,
        FileType type,
        string fromVersion,
@@ -230,7 +230,7 @@ internal sealed class FileService(
         bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
         {
             await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
-            await ImportFilesImpl(
+            await ImportImpl(
                 datasetVersion,
                 type,
                 new(datasetVersion.Identifier, fromVersion),
@@ -244,7 +244,7 @@ internal sealed class FileService(
         }
     }
 
-    private async Task ImportFilesImpl(
+    private async Task ImportImpl(
         DatasetVersion datasetVersion,
         FileType type,
         DatasetVersion fromVersion,
@@ -309,7 +309,7 @@ internal sealed class FileService(
         await metadataService.StoreBagItElement(datasetVersion, manifest, CancellationToken.None);
     }
 
-    public async Task<FileData?> GetFileData(
+    public async Task<FileData?> GetData(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -356,7 +356,7 @@ internal sealed class FileService(
         FileData? result = null;
         if (isHeadRequest)
         {
-            var metadata = await storageService.GetFileMetadata(filePath, cancellationToken);
+            var metadata = await storageService.GetMetadata(filePath, cancellationToken);
 
             if (metadata != null)
             {
@@ -369,7 +369,7 @@ internal sealed class FileService(
         }
         else
         {
-            var data = await storageService.GetFileData(
+            var data = await storageService.GetData(
                 filePath,
                 byteRange == null ? null : new(byteRange.From, byteRange.To),
                 cancellationToken);
@@ -392,7 +392,7 @@ internal sealed class FileService(
         return result;
     }
 
-    public async IAsyncEnumerable<FileMetadata> ListFiles(
+    public async IAsyncEnumerable<FileMetadata> List(
         DatasetVersion datasetVersion,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -421,7 +421,7 @@ internal sealed class FileService(
             if (payloadPath != previousPayloadPath)
             {
                 dict = [];
-                await foreach (var file in storageService.ListFiles(payloadPath, cancellationToken))
+                await foreach (var file in storageService.List(payloadPath, cancellationToken))
                 {
                     dict[file.Path] = file;
                 }
@@ -452,7 +452,7 @@ internal sealed class FileService(
         }
     }
 
-    public async Task WriteFileDataAsZip(
+    public async Task WriteDataAsZip(
         DatasetVersion datasetVersion,
         string[] paths,
         Stream stream,
@@ -486,7 +486,7 @@ internal sealed class FileService(
             }
 
             string actualFilePath = GetActualFilePath(datasetVersion, fetch, manifestItem.FilePath);
-            var fileData = await storageService.GetFileData(actualFilePath, null, cancellationToken);
+            var fileData = await storageService.GetData(actualFilePath, null, cancellationToken);
 
             if (fileData != null)
             {

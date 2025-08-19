@@ -8,7 +8,7 @@ namespace DorisStorageAdapter.Services.Contract;
 
 public interface IFileService
 {
-    Task<FileMetadata> StoreFile(
+    Task<FileMetadata> Store(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -17,19 +17,19 @@ public interface IFileService
         string? contentType,
         CancellationToken cancellationToken);
 
-    Task DeleteFile(
+    Task Delete(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
         CancellationToken cancellationToken);
 
-    Task ImportFiles(
+    Task Import(
         DatasetVersion datasetVersion,
         FileType type,
         string fromVersion,
         CancellationToken cancellationToken);
 
-    Task<FileData?> GetFileData(
+    Task<FileData?> GetData(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -38,11 +38,11 @@ public interface IFileService
         bool restrictToPubliclyAccessible,
         CancellationToken cancellationToken);
 
-    IAsyncEnumerable<FileMetadata> ListFiles(
+    IAsyncEnumerable<FileMetadata> List(
         DatasetVersion datasetVersion,
         CancellationToken cancellationToken);
 
-    Task WriteFileDataAsZip(
+    Task WriteDataAsZip(
         DatasetVersion datasetVersion,
         string[] paths,
         Stream stream,

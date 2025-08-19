@@ -24,13 +24,19 @@ public sealed class FileController(IFileService fileService) : ControllerBase
 {
     private readonly IFileService fileService = fileService;
 
+    private const string corsPrefix = nameof(FileController) + "_";
+
+    public const string storeCorsPolicyName = corsPrefix + nameof(Store);
+    public const string deleteCorsPolicyName = corsPrefix + nameof(Delete);
+    public const string getPublicDataCorsPolicyName = corsPrefix + nameof(GetPublicData);
+
     [HttpPut("file/{identifier}/{version}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
     [DisableRequestSizeLimit] // Disable request size limit to allow streaming large files
     // DisableFormValueModelBinding makes sure that ASP.NET does not try to parse the body as form data
     // when Content-Type is "multipart/form-data" or "application/x-www-form-urlencoded".
     [DisableFormValueModelBinding]
-    [EnableCors(nameof(StoreFile))]
+    [EnableCors(storeCorsPolicyName)]
     [BinaryRequestBody("*/*")]
     [ProducesResponseType<File>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
@@ -38,7 +44,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status411LengthRequired, MediaTypeNames.Application.ProblemJson)]
-    public async Task<Results<Ok<File>, ForbidHttpResult, ProblemHttpResult>> StoreFile(
+    public async Task<Results<Ok<File>, ForbidHttpResult, ProblemHttpResult>> Store(
         string identifier,
         string version,
         FileType type,
@@ -57,7 +63,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return TypedResults.Problem("Missing Content-Length.", statusCode: 411);
         }
 
-        var result = await fileService.StoreFile(
+        var result = await fileService.Store(
             datasetVersion: datasetVersion,
             type: type,
             filePath: filePath,
@@ -71,13 +77,13 @@ public sealed class FileController(IFileService fileService) : ControllerBase
 
     [HttpDelete("file/{identifier}/{version}/{type}")]
     [Authorize(Roles = Roles.WriteData)]
-    [EnableCors(nameof(DeleteFile))]
+    [EnableCors(deleteCorsPolicyName)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
-    public async Task<Results<Ok, ForbidHttpResult>> DeleteFile(
+    public async Task<Results<Ok, ForbidHttpResult>> Delete(
         string identifier,
         string version,
         FileType type,
@@ -91,7 +97,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return TypedResults.Forbid();
         }
 
-        await fileService.DeleteFile(datasetVersion, type, filePath, cancellationToken);
+        await fileService.Delete(datasetVersion, type, filePath, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -101,7 +107,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public async Task<Results<Ok, ForbidHttpResult>> ImportFiles(
+    public async Task<Results<Ok, ForbidHttpResult>> Import(
         string identifier,
         string version,
         FileType type,
@@ -115,7 +121,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return TypedResults.Forbid();
         }
 
-        await fileService.ImportFiles(datasetVersion, type, fromVersion, cancellationToken);
+        await fileService.Import(datasetVersion, type, fromVersion, cancellationToken);
 
         return TypedResults.Ok();
     }
@@ -130,7 +136,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(void), StatusCodes.Status404NotFound)]
-    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetFileData(
+    public async Task<Results<FileStreamHttpResult, ForbidHttpResult, NotFound>> GetData(
         string identifier,
         string version,
         FileType type,
@@ -144,7 +150,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return TypedResults.Forbid();
         }
 
-        var result = await GetFileData(datasetVersion, type, filePath, false, cancellationToken);
+        var result = await GetData(datasetVersion, type, filePath, false, cancellationToken);
 
         if (result == null)
         {
@@ -156,13 +162,13 @@ public sealed class FileController(IFileService fileService) : ControllerBase
 
     [HttpHead("file/public/{identifier}/{version}/{type}")]
     [HttpGet("file/public/{identifier}/{version}/{type}")]
-    [EnableCors(nameof(GetPublicFileData))]
+    [EnableCors(getPublicDataCorsPolicyName)]
     [SwaggerResponse(StatusCodes.Status200OK, null, typeof(FileStreamResult), "*/*")]
     [SwaggerResponse(StatusCodes.Status206PartialContent, null, typeof(FileStreamResult), "*/*")]
     [ProducesResponseType(typeof(void), StatusCodes.Status416RangeNotSatisfiable)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status404NotFound)]
-    public async Task<Results<FileStreamHttpResult, NotFound>> GetPublicFileData(
+    public async Task<Results<FileStreamHttpResult, NotFound>> GetPublicData(
        string identifier,
        string version,
        FileType type,
@@ -171,7 +177,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        var result = await GetFileData(datasetVersion, type, filePath, true, cancellationToken);
+        var result = await GetData(datasetVersion, type, filePath, true, cancellationToken);
 
         if (result == null)
         {
@@ -187,7 +193,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public Results<PushStreamHttpResult, ForbidHttpResult> GetFileDataAsZip(
+    public Results<PushStreamHttpResult, ForbidHttpResult> GetDataAsZip(
         string identifier,
         string version,
         [FromQuery] string[] path,
@@ -201,7 +207,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
         }
 
         return TypedResults.Stream(_ =>
-            fileService.WriteFileDataAsZip(
+            fileService.WriteDataAsZip(
                 datasetVersion,
                 path,
                 Response.BodyWriter.AsStream(),
@@ -216,16 +222,16 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
-    public Results<Ok<IAsyncEnumerable<File>>, ForbidHttpResult> ListFiles(
+    public Results<Ok<IAsyncEnumerable<File>>, ForbidHttpResult> List(
         string identifier,
         string version,
         CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersion(identifier, version);
 
-        async IAsyncEnumerable<File> ListFiles()
+        async IAsyncEnumerable<File> List()
         {
-            await foreach (var file in fileService.ListFiles(datasetVersion, cancellationToken))
+            await foreach (var file in fileService.List(datasetVersion, cancellationToken))
             {
                 yield return ToFile(file);
             }
@@ -236,7 +242,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return TypedResults.Forbid();
         }
 
-        return TypedResults.Ok(ListFiles());
+        return TypedResults.Ok(List());
     }
 
     private bool CheckClaims(DatasetVersion datasetVersion) =>
@@ -254,7 +260,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
         Type: file.Type
     );
 
-    private async Task<FileStreamHttpResult?> GetFileData(
+    private async Task<FileStreamHttpResult?> GetData(
         DatasetVersion datasetVersion,
         FileType type,
         string filePath,
@@ -275,7 +281,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return null;
         }
 
-        var fileData = await fileService.GetFileData(
+        var data = await fileService.GetData(
             datasetVersion: datasetVersion,
             type: type,
             filePath: filePath,
@@ -284,7 +290,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             restrictToPubliclyAccessible: restrictToPubliclyAccessible,
             cancellationToken: cancellationToken);
 
-        if (fileData == null)
+        if (data == null)
         {
             return null;
         }
@@ -295,14 +301,14 @@ public sealed class FileController(IFileService fileService) : ControllerBase
         // according to the given byte range, but the internal logic in TypedResults.Stream()
         // will try to seek according to the byte range. Using a FakeSeekableStream fixes
         // that by making seeking a no-op.
-        fileData = fileData with
+        data = data with
         {
-            Stream = new FakeSeekableStream(fileData.Stream, fileData.Size)
+            Stream = new FakeSeekableStream(data.Stream, data.Size)
         };
 
         return TypedResults.Stream(
-            stream: fileData.Stream,
-            contentType: fileData.ContentType,
+            stream: data.Stream,
+            contentType: data.ContentType,
             fileDownloadName: filePath.Split('/').Last(),
             enableRangeProcessing: true);
     }

@@ -50,7 +50,7 @@ internal sealed class NextCloudStorageService : IStorageService
         chunkedUploadBaseUri = GetUri(this.configuration.BaseUrl, $"remote.php/dav/uploads/{this.configuration.User}/");
     }
 
-    public async Task<StorageFileBaseMetadata> StoreFile(
+    public async Task<StorageFileBaseMetadata> Store(
         string filePath,
         Stream data,
         long size,
@@ -203,7 +203,7 @@ internal sealed class NextCloudStorageService : IStorageService
             DateModified: DateTimeOffset.FromUnixTimeSeconds(now).UtcDateTime);
     }
 
-    public async Task DeleteFile(string filePath, CancellationToken cancellationToken)
+    public async Task Delete(string filePath, CancellationToken cancellationToken)
     {
         var fileUri = GetWebDavFileUri(filePath);
 
@@ -231,7 +231,7 @@ internal sealed class NextCloudStorageService : IStorageService
         }
     }
 
-    public async Task<StorageFileMetadata?> GetFileMetadata(string filePath, CancellationToken cancellationToken)
+    public async Task<StorageFileMetadata?> GetMetadata(string filePath, CancellationToken cancellationToken)
     {
         var uri = GetWebDavFileUri(filePath);
         var response = await DoPropfind(
@@ -260,7 +260,7 @@ internal sealed class NextCloudStorageService : IStorageService
             Size: resource.ContentLength.GetValueOrDefault());
     }
 
-    public async Task<StorageFileData?> GetFileData(string filePath, StorageByteRange? byteRange, CancellationToken cancellationToken)
+    public async Task<StorageFileData?> GetData(string filePath, StorageByteRange? byteRange, CancellationToken cancellationToken)
     {
         IReadOnlyCollection<KeyValuePair<string, string>> headers =
             byteRange == null
@@ -325,7 +325,7 @@ internal sealed class NextCloudStorageService : IStorageService
             StreamLength: contentLength);
     }
 
-    public async IAsyncEnumerable<StorageFileMetadata> ListFiles(
+    public async IAsyncEnumerable<StorageFileMetadata> List(
         string path,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
