@@ -44,16 +44,18 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
         return TypedResults.Ok();
     }
 
-    [HttpPut("{identifier}/{version}/withdraw")]
+    [HttpPut("{identifier}/{version}/status")]
     [Authorize(Roles = Roles.Service)]
+    [Consumes("application/x-www-form-urlencoded")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(void), StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
-    public async Task<Results<Ok, ForbidHttpResult>> WithdrawDatasetVersion(
+    public async Task<Results<Ok, ForbidHttpResult>> SetDatasetVersionStatus(
         string identifier, 
         string version,
+        [FromForm] DatasetVersionStatus status,
         CancellationToken cancellationToken)
     {
         var datasetVersion = new DatasetVersion(identifier, version);
@@ -63,7 +65,7 @@ public sealed class DatasetVersionController(IDatasetVersionService service) : C
             return TypedResults.Forbid();
         }
 
-        await service.WithdrawDatasetVersion(datasetVersion, cancellationToken);
+        await service.SetDatasetVersionStatus(datasetVersion, status, cancellationToken);
 
         return TypedResults.Ok();
     }

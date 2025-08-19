@@ -13,7 +13,8 @@ public interface IDatasetVersionService
         string doi, 
         CancellationToken cancellationToken);
 
-    Task WithdrawDatasetVersion(
-        DatasetVersion datasetVersion, 
+    Task SetDatasetVersionStatus(
+        DatasetVersion datasetVersion,
+        DatasetVersionStatus status,
         CancellationToken cancellationToken);
 }

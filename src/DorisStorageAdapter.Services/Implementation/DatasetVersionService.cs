@@ -35,17 +35,17 @@ internal sealed class DatasetVersionService(
         ArgumentNullException.ThrowIfNull(datasetVersion);
         ArgumentException.ThrowIfNullOrEmpty(doi);
 
-        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
+        await ExecuteWithLock(datasetVersion, async () =>
         {
+            if (await metadataService.VersionHasBeenPublished(datasetVersion, cancellationToken))
+            {
+                throw new DatasetStatusException();
+            }
+
             await PublishDatasetVersionImpl(
                 datasetVersion, accessRight, canonicalDoi, doi, cancellationToken);
         },
         cancellationToken);
-
-        if (!lockSuccessful)
-        {
-            throw new ConflictException();
-        }
     }
 
     private async Task PublishDatasetVersionImpl(
@@ -92,7 +92,7 @@ internal sealed class DatasetVersionService(
         };
 
         bagInfo.SetAccessRight(accessRight);
-        bagInfo.SetDatasetStatus(DatasetStatus.completed);
+        bagInfo.SetDatasetVersionStatus(DatasetVersionStatus.published);
         bagInfo.SetVersion(datasetVersion.Version);
 
         byte[] bagInfoContents = await metadataService.StoreBagItElement(datasetVersion, bagInfo, cancellationToken);
@@ -114,31 +114,28 @@ internal sealed class DatasetVersionService(
         await metadataService.StoreBagItElement(datasetVersion, BagItDeclaration.Instance, CancellationToken.None);
     }
 
-    public async Task WithdrawDatasetVersion(
+    public async Task SetDatasetVersionStatus(
         DatasetVersion datasetVersion,
+        DatasetVersionStatus status,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(datasetVersion);
 
-        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, async () =>
+        await ExecuteWithLock(datasetVersion, async () =>
         {
             if (!await metadataService.VersionHasBeenPublished(datasetVersion, cancellationToken))
             {
                 throw new DatasetStatusException();
             }
 
-            await WithdrawDatasetVersionImpl(datasetVersion, cancellationToken);
+            await SetDatasetVersionStatusImpl(datasetVersion, status, cancellationToken);
         },
         cancellationToken);
-
-        if (!lockSuccessful)
-        {
-            throw new ConflictException();
-        }
     }
 
-    private async Task WithdrawDatasetVersionImpl(
+    private async Task SetDatasetVersionStatusImpl(
         DatasetVersion datasetVersion,
+        DatasetVersionStatus status,
         CancellationToken cancellationToken)
     {
         var bagInfo = await metadataService.LoadBagItElement<BagItInfo>(datasetVersion, cancellationToken);
@@ -149,12 +146,30 @@ internal sealed class DatasetVersionService(
             return;
         }
 
-        bagInfo.SetDatasetStatus(DatasetStatus.withdrawn);
+        if (bagInfo.GetDatasetVersionStatus() == status)
+        {
+            // Status is already correct, nothing to do
+            return;
+        }
 
+        bagInfo.SetDatasetVersionStatus(status);
         byte[] bagInfoContents = await metadataService.StoreBagItElement(datasetVersion, bagInfo, cancellationToken);
 
         var tagManifest = await metadataService.LoadBagItElement<BagItTagManifest>(datasetVersion, CancellationToken.None);
         tagManifest.AddOrUpdateItem(new(BagItInfo.FileName, SHA256.HashData(bagInfoContents)));
         await metadataService.StoreBagItElement(datasetVersion, tagManifest, CancellationToken.None);
+    }
+
+    private async Task ExecuteWithLock(
+        DatasetVersion datasetVersion,
+        Func<Task> task,
+        CancellationToken cancellationToken)
+    {
+        bool lockSuccessful = await lockService.TryLockDatasetVersionExclusive(datasetVersion, task, cancellationToken);
+
+        if (!lockSuccessful)
+        {
+            throw new ConflictException();
+        }
     }
 }

@@ -37,19 +37,19 @@ internal static class BagItInfoExtensions
         });
 
 
-    public static DatasetStatus? GetDatasetStatus(this BagItInfo bagItInfo) =>
+    public static DatasetVersionStatus? GetDatasetVersionStatus(this BagItInfo bagItInfo) =>
         bagItInfo.GetCustomValues(datasetStatusLabel).FirstOrDefault() switch
         {
-            completedDatasetStatusValue => DatasetStatus.completed,
-            withdrawnDatasetStatusValue => DatasetStatus.withdrawn,
+            completedDatasetStatusValue => DatasetVersionStatus.published,
+            withdrawnDatasetStatusValue => DatasetVersionStatus.withdrawn,
             _ => null
         };
 
-    public static void SetDatasetStatus(this BagItInfo bagItInfo, DatasetStatus? datasetStatus) =>
-        bagItInfo.SetCustomValues(datasetStatusLabel, datasetStatus switch
+    public static void SetDatasetVersionStatus(this BagItInfo bagItInfo, DatasetVersionStatus? status) =>
+        bagItInfo.SetCustomValues(datasetStatusLabel, status switch
         {
-            DatasetStatus.completed => [completedDatasetStatusValue],
-            DatasetStatus.withdrawn => [withdrawnDatasetStatusValue],
+            DatasetVersionStatus.published => [completedDatasetStatusValue],
+            DatasetVersionStatus.withdrawn => [withdrawnDatasetStatusValue],
             _ => []
         });
 

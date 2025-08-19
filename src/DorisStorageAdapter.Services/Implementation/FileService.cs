@@ -343,7 +343,7 @@ internal sealed class FileService(
                 return null;
             }
 
-            if (bagInfo.GetDatasetStatus() != DatasetStatus.completed ||
+            if (bagInfo.GetDatasetVersionStatus() != DatasetVersionStatus.published ||
                 type == FileType.data && bagInfo.GetAccessRight() != AccessRight.@public)
             {
                 return null;
