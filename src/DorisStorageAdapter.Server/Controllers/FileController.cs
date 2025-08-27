@@ -102,7 +102,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
         return TypedResults.Ok();
     }
 
-    [HttpPut("file/{identifier}/{version}/{type}/import")]
+    [HttpPut("file/{identifier}/{version}/import")]
     [Authorize(Roles = Roles.Service)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType(typeof(void), StatusCodes.Status401Unauthorized)]
@@ -110,7 +110,6 @@ public sealed class FileController(IFileService fileService) : ControllerBase
     public async Task<Results<Ok, ForbidHttpResult>> Import(
         string identifier,
         string version,
-        FileType type,
         [FromQuery, BindRequired] string fromVersion,
         CancellationToken cancellationToken)
     {
@@ -121,7 +120,7 @@ public sealed class FileController(IFileService fileService) : ControllerBase
             return TypedResults.Forbid();
         }
 
-        await fileService.Import(datasetVersion, type, fromVersion, cancellationToken);
+        await fileService.Import(datasetVersion, fromVersion, cancellationToken);
 
         return TypedResults.Ok();
     }

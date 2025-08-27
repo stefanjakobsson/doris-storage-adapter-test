@@ -214,7 +214,6 @@ internal sealed class FileService(
 
     public async Task Import(
        DatasetVersion datasetVersion,
-       FileType type,
        string fromVersion,
        CancellationToken cancellationToken)
     {
@@ -232,7 +231,6 @@ internal sealed class FileService(
             await ThrowIfHasBeenPublished(datasetVersion, cancellationToken);
             await ImportImpl(
                 datasetVersion,
-                type,
                 new(datasetVersion.Identifier, fromVersion),
                 cancellationToken);
         },
@@ -246,7 +244,6 @@ internal sealed class FileService(
 
     private async Task ImportImpl(
         DatasetVersion datasetVersion,
-        FileType type,
         DatasetVersion fromVersion,
         CancellationToken cancellationToken)
     {
@@ -255,55 +252,26 @@ internal sealed class FileService(
 
         async Task<BagItFetch> PrepareFetch()
         {
-            var fromFetch = await metadataService.LoadBagItElement<BagItFetch>(fromVersion, cancellationToken);
-            var fetch = await metadataService.LoadBagItElement<BagItFetch>(datasetVersion, cancellationToken);
-
-            foreach (var item in fromFetch.Items)
-            {
-                if (GetFileType(item.FilePath) == type)
-                {
-                    fetch.AddOrUpdateItem(item);
-                }
-            }
-
+            var fetch = await metadataService.LoadBagItElement<BagItFetch>(fromVersion, cancellationToken);
             string fromVersionUrl = "../" + UrlEncodePath(Paths.GetVersionPath(fromVersion)) + '/';
 
-            await foreach (var file in metadataService.ListPayloadFiles(fromVersion, type, cancellationToken))
+            await foreach (var file in metadataService.ListPayloadFiles(fromVersion, null, cancellationToken))
             {
-                if (!fromFetch.Contains(file.Path))
-                {
-                    fetch.AddOrUpdateItem(new(file.Path, file.Size, fromVersionUrl + UrlEncodePath(file.Path)));
-                }
+                fetch.AddOrUpdateItem(new(file.Path, file.Size, fromVersionUrl + UrlEncodePath(file.Path)));
             }
 
             return fetch;
         }
 
-        async Task<BagItPayloadManifest> PreparePayloadManifest()
-        {
-            var fromManifest = await metadataService.LoadBagItElement<BagItPayloadManifest>(fromVersion, cancellationToken);
-            var manifest = await metadataService.LoadBagItElement<BagItPayloadManifest>(datasetVersion, cancellationToken);
-
-            foreach (var item in fromManifest.Items)
-            {
-                if (GetFileType(item.FilePath) == type)
-                {
-                    manifest.AddOrUpdateItem(item);
-                }
-            }
-
-            return manifest;
-        }
-
-        if (await metadataService.ListPayloadFiles(datasetVersion, type, cancellationToken)
+        if (await metadataService.ListPayloadFiles(datasetVersion, null, cancellationToken)
             .GetAsyncEnumerator(cancellationToken).MoveNextAsync())
         {
-            // Payload files present for the given file type, abort.
+            // Payload files present, abort.
             return;
         }
 
         var fetch = await PrepareFetch();
-        var manifest = await PreparePayloadManifest();
+        var manifest = await metadataService.LoadBagItElement<BagItPayloadManifest>(fromVersion, cancellationToken);
 
         await metadataService.StoreBagItElement(datasetVersion, fetch, cancellationToken);
         await metadataService.StoreBagItElement(datasetVersion, manifest, CancellationToken.None);

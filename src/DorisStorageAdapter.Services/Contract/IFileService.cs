@@ -25,7 +25,6 @@ public interface IFileService
 
     Task Import(
         DatasetVersion datasetVersion,
-        FileType type,
         string fromVersion,
         CancellationToken cancellationToken);
 
