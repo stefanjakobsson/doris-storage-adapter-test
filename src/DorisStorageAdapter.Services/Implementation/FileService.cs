@@ -13,6 +13,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -441,7 +442,7 @@ internal sealed class FileService(
         string versionPath = Paths.GetVersionPath(datasetVersion);
 
         using var zipArchive = new ZipArchive(stream, ZipArchiveMode.Create, false);
-        var zipManifest = new BagItPayloadManifest();
+        var sent = new List<BagItManifestItem>();
 
         foreach (var manifestItem in payloadManifest.Items)
         {
@@ -464,16 +465,36 @@ internal sealed class FileService(
                     await fileData.Stream.CopyToAsync(entryStream, cancellationToken);
                 }
 
-                zipManifest.AddOrUpdateItem(new(zipFilePath, manifestItem.Checksum));
+                sent.Add(new(zipFilePath, manifestItem.Checksum));
             }
         }
 
-        if (zipManifest.Items.Any())
+        if (sent.Count > 0)
         {
-            using var entryStream = CreateZipEntryStream(
-                zipArchive, versionPath + '/' + BagItPayloadManifest.FileName);
-            var content = zipManifest.Serialize();
-            await entryStream.WriteAsync(content, cancellationToken);
+            // Send sha256.txt in the format used by UNIX utility sha256sum:
+            // one line per file separated by newline,
+            // each line composed of checksum + ' ' + file name.
+            // File names with backslash or newline are escaped by
+            // starting the line with a backslash and escaping \ as \\
+            // and newline as \n.
+
+            using var entryStream = CreateZipEntryStream(zipArchive, versionPath + "/sha256.txt");
+
+            foreach (var file in sent)
+            {
+                string name = file.FilePath
+                    .Replace("\\", "\\\\", StringComparison.Ordinal)
+                    .Replace("\n", "\\n", StringComparison.Ordinal);
+
+                await entryStream.WriteAsync(Encoding.UTF8.GetBytes(
+                    (name.Length > file.FilePath.Length
+                        ? "\\"
+                        : "") +
+#pragma warning disable CA1308 // Normalize strings to uppercase
+                    Convert.ToHexString(file.Checksum).ToLowerInvariant() + ' ' + name + '\n'),
+#pragma warning disable CA1308
+                    cancellationToken);
+            }
         }
     }
 
