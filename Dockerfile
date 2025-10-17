@@ -1,5 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS publish
 ARG BUILD_CONFIGURATION=Release
+
+# Build argument for setting the MINVERVERSIONOVERRIDE environment
+# variable to allow passing in MinVer version instead of calculating it
+# in dotnet publish.
+ARG MINVERVERSIONOVERRIDE
+ENV MINVERVERSIONOVERRIDE=${MINVERVERSIONOVERRIDE}
+
 WORKDIR /src
 
 COPY src/DorisStorageAdapter.Helpers/DorisStorageAdapter.Helpers.csproj DorisStorageAdapter.Helpers/

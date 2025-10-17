@@ -18,6 +18,35 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for MinVer to access tags
+
+      # Using the minver CLI, compute the MinVer version and 
+      # set MINVERVERSIONOVERRIDE which will be picked used by later steps.
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install MinVer CLI
+        run: dotnet tool install -g minver-cli
+      - name: Calculate version with MinVer
+        id: minver
+        run: |
+          VER="$(minver)"
+          #echo "value=$VER" >> "$GITHUB_OUTPUT"
+          echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
+          echo "Resolved MinVer version: $VER"
+
+          # Parse major/minor for extra Docker tags (optional)
+          MINVER_BASE="${VER%%-*}"          # strip -pre if present
+          MINVER_MAJOR="${BASE%%.*}"
+          MINVER_MINOR="${BASE%.*}"
+          MINVER_PATCH=
+          #echo "MAJOR=$MAJOR" >> "$GITHUB_ENV"
+          #echo "MINOR=$MINOR" >> "$GITHUB_ENV"
+          #echo "BASE=$BASE"   >> "$GITHUB_ENV"
+      
+      # Build and push Docker image
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
@@ -26,9 +55,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push Docker image (latest)
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          build-args: |
+            MINVERVERSIONOVERRIDE=${{ env.MINVERVERSIONOVERRIDE }}
+          tags: ghcr.io/${{ github.repository }}:${{ env.MINVERVERSIONOVERRIDE }}
