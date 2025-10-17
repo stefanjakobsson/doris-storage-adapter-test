@@ -34,7 +34,7 @@ jobs:
         id: tags
         shell: bash
         run: |
-          IMAGE="ghcr.io/${ github.repository }"
+          IMAGE="ghcr.io/${{ github.repository }}"
 
           # Always add MinVer version and :current
           TAGS="$IMAGE:$MINVERVERSIONOVERRIDE\n$IMAGE:current"
