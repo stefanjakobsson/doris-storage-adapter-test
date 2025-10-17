@@ -37,8 +37,7 @@ jobs:
           IMAGE="ghcr.io/${ github.repository }"
 
           # Always add MinVer version and :current
-          TAGS="$IMAGE:$MINVERVERSIONOVERRIDE
-          $IMAGE:current"
+          TAGS="$IMAGE:$MINVERVERSIONOVERRIDE\n$IMAGE:current"
 
           IS_RELEASE="false"
           if [[ "${MINVERVERSIONOVERRIDE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
