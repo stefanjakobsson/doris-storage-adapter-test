@@ -27,7 +27,7 @@ jobs:
         run: dotnet tool install -g minver-cli
       - name: Calculate version with MinVer
         run: |
-          VER="$(minver) -t v" # -t v means tag prefix "v" should be used
+          VER="$(minver -t 'v')" # -t 'v' means tag prefix 'v' should be used
           echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
 
       - name: Compose Docker tags
