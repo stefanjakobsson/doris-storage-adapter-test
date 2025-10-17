@@ -22,29 +22,43 @@ jobs:
           fetch-depth: 0 # Needed for MinVer to access tags
 
       # Using the minver CLI, compute the MinVer version and 
-      # set MINVERVERSIONOVERRIDE which will be picked used by later steps.
-      - name: Install .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+      # set MINVERVERSIONOVERRIDE which will be used by later steps.
       - name: Install MinVer CLI
         run: dotnet tool install -g minver-cli
       - name: Calculate version with MinVer
-        id: minver
         run: |
-          VER="$(minver)"
-          #echo "value=$VER" >> "$GITHUB_OUTPUT"
+          VER="$(minver) -t v" # -t v means tag prefix "v" should be used
           echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
-          echo "Resolved MinVer version: $VER"
 
-          # Parse major/minor for extra Docker tags (optional)
-          MINVER_BASE="${VER%%-*}"          # strip -pre if present
-          MINVER_MAJOR="${BASE%%.*}"
-          MINVER_MINOR="${BASE%.*}"
-          MINVER_PATCH=
-          #echo "MAJOR=$MAJOR" >> "$GITHUB_ENV"
-          #echo "MINOR=$MINOR" >> "$GITHUB_ENV"
-          #echo "BASE=$BASE"   >> "$GITHUB_ENV"
+      - name: Compose Docker tags
+        id: tags
+        shell: bash
+        run: |
+          IMAGE="ghcr.io/${ github.repository }"
+
+          # Always add MinVer version and :current
+          TAGS="$IMAGE:$MINVERVERSIONOVERRIDE
+          $IMAGE:current"
+
+          IS_RELEASE="false"
+          if [[ "${MINVERVERSIONOVERRIDE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IS_RELEASE="true"
+          fi
+
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            TAGS="$TAGS
+            $IMAGE:latest"
+            echo "Adding :latest (release build)"
+          else
+            echo "Not a release build; skipping :latest"
+          fi
+
+          # Expose as a multi-line output for build-push-action
+          {
+            echo "list<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
       
       # Build and push Docker image
       - name: Set up Docker Buildx
@@ -62,4 +76,4 @@ jobs:
           push: true
           build-args: |
             MINVERVERSIONOVERRIDE=${{ env.MINVERVERSIONOVERRIDE }}
-          tags: ghcr.io/${{ github.repository }}:${{ env.MINVERVERSIONOVERRIDE }}
+          tags: ${{ steps.tags.outputs.list }}
