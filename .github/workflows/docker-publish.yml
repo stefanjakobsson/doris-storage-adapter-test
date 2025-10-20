@@ -75,6 +75,9 @@ jobs:
       
       - name: Set SOURCE_DATE_EPOCH to latest Git commit timestamp
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+
+      - name: Make GITHUB_ACTIONS available to expressions
+        run: echo "GITHUB_ACTIONS=$GITHUB_ACTIONS" >> "$GITHUB_ENV"
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
