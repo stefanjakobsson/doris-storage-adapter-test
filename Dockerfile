@@ -18,7 +18,7 @@ RUN dotnet publish DorisStorageAdapter.Server/DorisStorageAdapter.Server.csproj 
 -c $BUILD_CONFIGURATION \
 -o /app/publish \
 --no-restore \
--p:UseAppHost=false #\
+-p:UseAppHost=false \
 -p:MinVerVersionOverride=$MINVERVERSIONOVERRIDE \
 -p:CI=$CI
 
