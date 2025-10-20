@@ -73,8 +73,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Set SOURCE_DATE_EPOCH to latest Git commit timestamp
-        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      - name: Get Git commit timestamps
+        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
 
       - name: Make GITHUB_ACTIONS available to expressions
         run: echo "GITHUB_ACTIONS=$GITHUB_ACTIONS" >> "$GITHUB_ENV"
@@ -88,3 +88,5 @@ jobs:
             CI=${{ env.GITHUB_ACTIONS }}
             MINVERVERSIONOVERRIDE=${{ env.MINVERVERSIONOVERRIDE }}
           tags: ${{ steps.tags.outputs.list }}
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
