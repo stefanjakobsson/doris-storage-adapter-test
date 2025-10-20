@@ -22,6 +22,9 @@ RUN dotnet publish DorisStorageAdapter.Server/DorisStorageAdapter.Server.csproj 
 -p:MinVerVersionOverride=$MINVERVERSIONOVERRIDE \
 -p:CI=$CI
 
+RUN DATE_FMT="$(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S')" \
+&& find /app/publish -exec touch -d "${DATE_FMT}" --no-dereference {} +
+
 FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:ebdd28e9ee54ea5032a390500d37bb1b6d45c36c6ba51e10f3ddfcdc746f3e28 AS final
 USER app
 WORKDIR /app
