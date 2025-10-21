@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-docker build --no-cache \
+docker build \
     -t doris-storage-adapter \
     --build-arg VERSION="$(./resolve-version.sh)" \
     --build-arg CI=true \
