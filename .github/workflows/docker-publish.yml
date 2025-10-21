@@ -86,7 +86,7 @@ jobs:
           push: true
           build-args: |
             CI=${{ env.GITHUB_ACTIONS }}
-            MINVERVERSIONOVERRIDE=${{ env.MINVERVERSIONOVERRIDE }}
+            VERSION=${{ env.MINVERVERSIONOVERRIDE }}
+            SOURCE_DATE_EPOCH:  ${{ env.TIMESTAMP }}
           tags: ${{ steps.tags.outputs.list }}
-        env:
-          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+
