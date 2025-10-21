@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
-
-VERSION="$(bash resolve_version.sh)"
-
-echo "Resolved version: $VERSION"
-
-docker build \
-    --build-arg VERSION=$VERSION \
+docker build --no-cache \
+    -t doris-storage-adapter \
+    --build-arg VERSION="$(./resolve-version.sh)" \
     --build-arg CI=true \
     --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
     .
+    

@@ -23,13 +23,9 @@ jobs:
         with:
           fetch-depth: 0 # Needed for MinVer to access tags
 
-      # Using the minver CLI, compute the MinVer version and 
-      # set MINVERVERSIONOVERRIDE which will be used by later steps.
-      - name: Install MinVer CLI
-        run: dotnet tool install -g minver-cli
       - name: Calculate version with MinVer
         run: |
-          VER="$(minver -t 'v')" # -t 'v' means tag prefix 'v' should be used
+          VER="$(./resolve-version.sh))"
           echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
 
       - name: Compose Docker tags
@@ -89,7 +85,3 @@ jobs:
             VERSION=${{ env.MINVERVERSIONOVERRIDE }}
             SOURCE_DATE_EPOCH=${{ env.TIMESTAMP }}
           tags: ${{ steps.tags.outputs.list }}
-          attests: |
-            type=provenance,mode=max,inline=false
-            type=sbom
-
