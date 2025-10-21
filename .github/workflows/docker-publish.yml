@@ -25,7 +25,7 @@ jobs:
 
       - name: Calculate version with MinVer
         run: |
-          VER="$(bash resolve-version.sh))"
+          VER="$(bash resolve-version.sh)"
           echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
 
       - name: Compose Docker tags

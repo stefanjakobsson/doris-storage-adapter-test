@@ -5,6 +5,6 @@ echo $(
         bash -lc '
             git config --global --add safe.directory /src && 
             dotnet tool install -g minver-cli --version 6.0.0 > /dev/null && 
-            /root/.dotnet/tools/minver -t v /src 2> /dev/null
+            /root/.dotnet/tools/minver -t v /src
         '
 )
