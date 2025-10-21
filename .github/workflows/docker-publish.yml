@@ -24,9 +24,10 @@ jobs:
           fetch-depth: 0 # Needed for MinVer to access tags
 
       - name: Resolve version with MinVer
-        run: |
-          VER="$(bash resolve-version.sh)"
-          echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
+        run: echo "MINVERVERSIONOVERRIDE=$(bash resolve-version.sh)" >> "$GITHUB_ENV"
+                
+      - name: Set SOURCE_DATE_EPOCH to timestamp of latest git commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
 
       - name: Compose Docker tags
         id: tags
@@ -68,9 +69,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Set SOURCE_DATE_EPOCH to timestamp of latest git commit
-        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
