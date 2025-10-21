@@ -87,6 +87,6 @@ jobs:
           build-args: |
             CI=${{ env.GITHUB_ACTIONS }}
             VERSION=${{ env.MINVERVERSIONOVERRIDE }}
-            SOURCE_DATE_EPOCH:  ${{ env.TIMESTAMP }}
+            SOURCE_DATE_EPOCH=${{ env.TIMESTAMP }}
           tags: ${{ steps.tags.outputs.list }}
 
