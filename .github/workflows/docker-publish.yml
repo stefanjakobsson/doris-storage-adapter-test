@@ -89,6 +89,7 @@ jobs:
             VERSION=${{ env.MINVERVERSIONOVERRIDE }}
             SOURCE_DATE_EPOCH=${{ env.TIMESTAMP }}
           tags: ${{ steps.tags.outputs.list }}
-          provenance: true
-          sbom: false
+          attest: |
+            type=provenance,mode=max,inline=false
+            type=sbom
 
