@@ -23,7 +23,7 @@ RUN dotnet publish DorisStorageAdapter.Server/DorisStorageAdapter.Server.csproj 
 -p:MinVerVersionOverride=$VERSION \
 -p:CI=$CI
 
-RUN if [ -n "${SOURCE_DATE_EPOCH}" ]; then \
+RUN if [[ -n "${SOURCE_DATE_EPOCH}" ]]; then \
         SOURCE_DATE_FORMATTED="$(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S')" && \
         find /app/publish -exec touch -d "${SOURCE_DATE_FORMATTED}" --no-dereference {} +; \
     fi

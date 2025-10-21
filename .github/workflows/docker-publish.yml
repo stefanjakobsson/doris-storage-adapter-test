@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0 # Needed for MinVer to access tags
 
-      - name: Calculate version with MinVer
+      - name: Resolve version with MinVer
         run: |
           VER="$(bash resolve-version.sh)"
           echo "MINVERVERSIONOVERRIDE=$VER" >> "$GITHUB_ENV"
@@ -69,19 +69,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Get Git commit timestamps
-        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      - name: Set SOURCE_DATE_EPOCH to timestamp of latest git commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
 
-      - name: Make GITHUB_ACTIONS available to expressions
-        run: echo "GITHUB_ACTIONS=$GITHUB_ACTIONS" >> "$GITHUB_ENV"
-      
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           build-args: |
-            CI=${{ env.GITHUB_ACTIONS }}
+            CI=true
             VERSION=${{ env.MINVERVERSIONOVERRIDE }}
-            SOURCE_DATE_EPOCH=${{ env.TIMESTAMP }}
+            SOURCE_DATE_EPOCH=${{ env.SOURCE_DATE_EPOCH }}
           tags: ${{ steps.tags.outputs.list }}
