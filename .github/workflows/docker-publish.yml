@@ -37,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Calculate version with MinVer
-        run: echo "MINVERVERSIONOVERRIDE=$(bash calucate-version.sh)" >> "$GITHUB_ENV"
+        run: echo "MINVERVERSIONOVERRIDE=$(bash calculate-version.sh)" >> "$GITHUB_ENV"
                 
       - name: Set SOURCE_DATE_EPOCH to timestamp of latest git commit
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
@@ -66,7 +66,7 @@ jobs:
             echo "Not a release build"
           fi
 
-          echo "Tags: $TAGS"
+          echo "Tags:\n$TAGS"
 
           # Expose as a multi-line output for build-push-action
           {
