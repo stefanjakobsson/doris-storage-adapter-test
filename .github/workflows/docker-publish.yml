@@ -36,8 +36,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve version with MinVer
-        run: echo "MINVERVERSIONOVERRIDE=$(bash resolve-version.sh)" >> "$GITHUB_ENV"
+      - name: Calculate version with MinVer
+        run: echo "MINVERVERSIONOVERRIDE=$(bash calucate-version.sh)" >> "$GITHUB_ENV"
                 
       - name: Set SOURCE_DATE_EPOCH to timestamp of latest git commit
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
@@ -57,15 +57,16 @@ jobs:
             MINOR="${VERSION#${MAJOR}.}"  # Strip "<major>." from the front
             MINOR="${MINOR%%.*}"          # Remove everything after next dot
 
-            echo "Release build; adding :latest, :$MAJOR and :$MAJOR.$MINOR"
+            #echo "Release build; adding :latest, :$MAJOR and :$MAJOR.$MINOR"
             TAGS="$TAGS
             $IMAGE:latest
             $IMAGE:$MAJOR
             $IMAGE:$MAJOR.$MINOR"
-            echo "Adding :latest (release build)"
           else
-            echo "Not a release build; skipping :latest"
+            #echo "Not a release build"
           fi
+
+          echo "Tags: $TAGS"
 
           # Expose as a multi-line output for build-push-action
           {
