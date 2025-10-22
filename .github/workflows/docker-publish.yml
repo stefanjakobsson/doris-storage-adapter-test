@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -29,8 +30,11 @@ jobs:
           TAG_SHA=$(git rev-list -n 1 "$GITHUB_REF_NAME")
           if ! git merge-base --is-ancestor "$TAG_SHA" origin/main; then
             echo "Tag $GITHUB_REF_NAME is not on main, aborting."
-            exit 0
+            gh run cancel ${{ github.run_id }}
+            gh run watch ${{ github.run_id }}
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve version with MinVer
         run: echo "MINVERVERSIONOVERRIDE=$(bash resolve-version.sh)" >> "$GITHUB_ENV"
