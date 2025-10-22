@@ -66,8 +66,6 @@ jobs:
             echo "Not a release build"
           fi
 
-          echo "Tags:\n$TAGS"
-
           # Expose as a multi-line output for build-push-action
           {
             echo "list<<EOF"
