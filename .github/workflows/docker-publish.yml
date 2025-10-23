@@ -10,12 +10,6 @@ on:
     tags:
       - 'v*'
 
-concurrency:
-  # Cancel any already running job for this commit,
-  # which happens if both commit and tag is pushed to main simultaneously.
-  group: ${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: true
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -62,7 +56,7 @@ jobs:
           if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             MAJOR="${VERSION%%.*}"        # Everything before first dot
             MINOR="${VERSION#${MAJOR}.}"  # Strip "<major>." from the front
-            MINOR="${MINOR%%.*}"                        # Remove everything after next dot
+            MINOR="${MINOR%%.*}"          # Remove everything after next dot
 
             echo "Release build; adding :latest, :$MAJOR and :$MAJOR.$MINOR"
             TAGS="$TAGS
